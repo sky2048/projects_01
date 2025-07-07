@@ -1,0 +1,866 @@
+import { MAP_CONFIG, ECONOMY_CONFIG, WAVE_CONFIG, TOWER_RARITY } from '../config/GameConfig.js';
+import { PathFinder } from '../utils/PathFinder.js';
+import { Monster } from '../entities/Monster.js';
+import { Tower } from '../entities/Tower.js';
+import { WaveManager } from '../managers/WaveManager.js';
+import { TowerShop } from '../managers/TowerShop.js';
+import { EquipmentManager } from '../managers/EquipmentManager.js';
+
+export class GameScene extends Phaser.Scene {
+    constructor() {
+        super('GameScene');
+    }
+
+    create() {
+        this.cameras.main.setBackgroundColor('#2d4a3e');
+        
+        // 按顺序初始化各个组件
+        this.initializeGame();
+    }
+
+    async initializeGame() {
+        try {
+            // 第一步：初始化基础组件
+            this.initGameState();
+            this.createGameBoard();
+            this.createPath();
+            this.createGroups();
+            this.setupInput();
+            
+            // 第二步：启动并等待UI场景初始化完成
+            await this.initializeUIScene();
+            
+            // 第三步：初始化管理器（依赖UI场景）
+            this.initManagers();
+            
+            console.log('游戏初始化完成');
+        } catch (error) {
+            console.error('游戏初始化失败:', error);
+            // 降级处理 - 强制初始化
+            this.initManagers();
+        }
+    }
+
+    initializeUIScene() {
+        return new Promise((resolve, reject) => {
+            // 启动UI场景
+            this.scene.launch('UIScene');
+            
+            // 等待UI场景的ready事件
+            const uiScene = this.scene.get('UIScene');
+            uiScene.events.once('ready', () => {
+                console.log('UI场景初始化完成');
+                resolve();
+            });
+            
+            // 设置超时保护
+            const timeout = setTimeout(() => {
+                console.warn('UI场景初始化超时');
+                reject(new Error('UI场景初始化超时'));
+            }, 3000);
+            
+            // 成功时清除超时
+            uiScene.events.once('ready', () => {
+                clearTimeout(timeout);
+            });
+        });
+    }
+
+    initGameState() {
+        console.log('初始化游戏状态...');
+        console.log('ECONOMY_CONFIG:', ECONOMY_CONFIG);
+        console.log('STARTING_GOLD:', ECONOMY_CONFIG.STARTING_GOLD);
+        
+        this.gameState = {
+            gold: ECONOMY_CONFIG.STARTING_GOLD,
+            health: 100,
+            currentWave: 0,
+            isPaused: false,
+            isGameOver: false,
+            level: 1,  // 玩家等级
+            maxTowers: 2  // 最大可放置塔数量，初始2个
+        };
+        
+        console.log('游戏状态初始化完成:', this.gameState);
+    }
+
+    createGameBoard() {
+        this.board = [];
+        this.tileSize = MAP_CONFIG.TILE_SIZE;
+        this.boardWidth = MAP_CONFIG.BOARD_WIDTH;
+        this.boardHeight = MAP_CONFIG.BOARD_HEIGHT;
+        
+        // 计算棋盘偏移，使其居中
+        this.boardOffsetX = (1280 - this.boardWidth * this.tileSize) / 2;
+        this.boardOffsetY = 50;
+        
+        // 创建网格
+        for (let y = 0; y < this.boardHeight; y++) {
+            this.board[y] = [];
+            for (let x = 0; x < this.boardWidth; x++) {
+                const tileX = this.boardOffsetX + x * this.tileSize;
+                const tileY = this.boardOffsetY + y * this.tileSize;
+                
+                // 创建网格背景
+                const tile = this.add.rectangle(
+                    tileX + this.tileSize / 2, 
+                    tileY + this.tileSize / 2, 
+                    this.tileSize - 2, 
+                    this.tileSize - 2, 
+                    0x4a5d4a
+                );
+                tile.setStrokeStyle(1, 0x2d4a3e);
+                
+                this.board[y][x] = {
+                    x: x,
+                    y: y,
+                    worldX: tileX + this.tileSize / 2,
+                    worldY: tileY + this.tileSize / 2,
+                    tile: tile,
+                    tower: null,
+                    isPath: false,
+                    isBlocked: false
+                };
+            }
+        }
+    }
+
+    createPath() {
+        // 创建一条从左到右的路径
+        this.pathStart = { x: 0, y: Math.floor(this.boardHeight / 2) };
+        this.pathEnd = { x: this.boardWidth - 1, y: Math.floor(this.boardHeight / 2) };
+        
+        // 创建路径点
+        this.pathPoints = [];
+        for (let x = 0; x < this.boardWidth; x++) {
+            const pathTile = this.board[this.pathStart.y][x];
+            pathTile.isPath = true;
+            pathTile.tile.setFillStyle(0x8b7355);
+            
+            this.pathPoints.push({
+                x: pathTile.worldX,
+                y: pathTile.worldY
+            });
+        }
+        
+        // 初始化路径查找器
+        this.pathFinder = new PathFinder(this.board, this.pathStart, this.pathEnd);
+    }
+
+    initManagers() {
+        // 装备管理器
+        this.equipmentManager = new EquipmentManager(this);
+        
+        // 波次管理器
+        this.waveManager = new WaveManager(this);
+        
+        // 塔商店管理器
+        this.towerShop = new TowerShop(this);
+        
+        // 初始化UI显示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.updateLevel) {
+            uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
+        }
+        if (uiScene && uiScene.updateGold) {
+            console.log('初始化UI金币显示:', this.gameState.gold);
+            uiScene.updateGold(this.gameState.gold);
+        }
+        if (uiScene && uiScene.updateHealth) {
+            uiScene.updateHealth(this.gameState.health);
+        }
+    }
+
+    createGroups() {
+        // 创建游戏对象组
+        this.monsters = this.add.group();
+        this.towers = this.add.group();
+        this.projectiles = this.add.group();
+        
+        // 设置碰撞检测（支持穿透投射物多次碰撞）
+        this.physics.add.overlap(this.projectiles, this.monsters, this.onProjectileHitMonster, this.shouldProcessCollision, this);
+    }
+
+    setupInput() {
+        // 点击棋盘放置塔
+        this.input.on('pointerdown', (pointer) => {
+            this.onBoardClick(pointer);
+        });
+    }
+
+    onBoardClick(pointer) {
+        if (this.gameState.isPaused || this.gameState.isGameOver) return;
+        
+        const boardX = Math.floor((pointer.x - this.boardOffsetX) / this.tileSize);
+        const boardY = Math.floor((pointer.y - this.boardOffsetY) / this.tileSize);
+        
+        console.log(`点击棋盘位置: (${boardX}, ${boardY})`);
+        
+        if (boardX >= 0 && boardX < this.boardWidth && 
+            boardY >= 0 && boardY < this.boardHeight) {
+            
+            const tile = this.board[boardY][boardX];
+            
+            console.log(`tile信息: isPath=${tile.isPath}, hasTower=${!!tile.tower}`);
+            console.log(`towerShop状态: exists=${!!this.towerShop}, selectedTower=${!!this.towerShop?.selectedTower}`);
+            
+            if (tile.tower) {
+                // 点击已有的塔 - 选择它
+                console.log('选择已有的塔');
+                this.selectTower(tile.tower);
+            } else if (!tile.isPath && this.towerShop && this.towerShop.selectedTower) {
+                // 点击空地且有选中的塔 - 放置塔
+                console.log('尝试放置塔');
+                this.placeTower(boardX, boardY);
+            } else {
+                // 点击空地但没有选中塔 - 取消选择
+                console.log('清除选择');
+                this.deselectTower();
+            }
+        }
+    }
+
+    selectTower(tower) {
+        // 清除之前选中的塔
+        if (this.selectedTower) {
+            this.selectedTower.hideRange();
+            this.selectedTower.setSelected(false);
+        }
+        
+        // 选中新塔
+        this.selectedTower = tower;
+        tower.showRange();
+        tower.setSelected(true);
+        
+        // 显示塔信息
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showSelectedTowerInfo) {
+            uiScene.showSelectedTowerInfo(tower);
+        }
+        
+        console.log(`选中了塔: ${tower.towerData.name}`);
+    }
+
+    deselectTower() {
+        if (this.selectedTower) {
+            this.selectedTower.hideRange();
+            this.selectedTower.setSelected(false);
+            this.selectedTower = null;
+            
+            // 清除UI显示
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.clearSelectedTowerInfo) {
+                uiScene.clearSelectedTowerInfo();
+            }
+        }
+    }
+
+    placeTower(x, y) {
+        console.log(`placeTower调用: x=${x}, y=${y}`);
+        console.log(`towerShop检查: exists=${!!this.towerShop}, selectedTower=${!!this.towerShop?.selectedTower}`);
+        
+        if (!this.towerShop || !this.towerShop.selectedTower) {
+            console.log('没有选中塔，返回');
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification('请先从商店选择一个塔', 'warning', 2000);
+            }
+            return;
+        }
+        
+        // 检查塔数量限制
+        const currentTowerCount = this.towers.children.entries.length;
+        console.log(`塔数量检查: 当前=${currentTowerCount}, 最大=${this.gameState.maxTowers}`);
+        if (currentTowerCount >= this.gameState.maxTowers) {
+            console.log('塔位已满，返回');
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification(`塔位已满！当前 ${currentTowerCount}/${this.gameState.maxTowers}，请先升级`, 'warning', 2500);
+            }
+            console.log(`已达到塔数量上限 (${this.gameState.maxTowers}个)`);
+            return;
+        }
+        
+        const towerData = this.towerShop.selectedTower;
+        console.log(`金币检查: 当前=${this.gameState.gold}, 需要=${ECONOMY_CONFIG.TOWER_SHOP_COST}`);
+        if (this.gameState.gold < ECONOMY_CONFIG.TOWER_SHOP_COST) {
+            console.log('金币不足，返回');
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification(`金币不足！放置塔需要 ${ECONOMY_CONFIG.TOWER_SHOP_COST} 金币`, 'error', 2000);
+            }
+            return;
+        }
+        
+        if (this.gameState.gold >= ECONOMY_CONFIG.TOWER_SHOP_COST) {
+            console.log('金币充足，开始放置塔');
+            const tile = this.board[y][x];
+            console.log(`目标tile: x=${x}, y=${y}, tile存在=${!!tile}`);
+            
+            // 临时放置塔来测试路径
+            const tempTower = { isTemp: true };
+            tile.tower = tempTower;
+            
+            // 检查放置塔后是否还有有效路径
+            console.log('检查路径有效性...');
+            if (!this.pathFinder.hasValidPath()) {
+                console.log('路径被阻断，取消放置');
+                // 移除临时塔
+                tile.tower = null;
+                const uiScene = this.scene.get('UIScene');
+                if (uiScene && uiScene.showNotification) {
+                    uiScene.showNotification('无法在此位置放置塔：会阻断怪物路径', 'error', 2500);
+                }
+                console.log('无法在此位置放置塔：会阻断路径');
+                return;
+            }
+            
+            // 移除临时塔，放置真正的塔
+            tile.tower = null;
+            console.log('路径有效，创建真正的塔');
+            console.log(`塔数据:`, towerData);
+            console.log(`世界坐标: x=${tile.worldX}, y=${tile.worldY}`);
+            
+            const tower = new Tower(this, tile.worldX, tile.worldY, towerData);
+            console.log('塔创建成功:', tower);
+            
+            this.towers.add(tower);
+            tile.tower = tower;
+            console.log('塔已添加到游戏中');
+            
+            this.gameState.gold -= ECONOMY_CONFIG.TOWER_SHOP_COST;
+            
+            // 更新所有活跃怪物的路径
+            this.updateMonsterPaths();
+            
+            // 获取UI场景
+            const uiScene = this.scene.get('UIScene');
+            
+            // 通知UI更新
+            if (uiScene && uiScene.updateGold) {
+                uiScene.updateGold(this.gameState.gold);
+            }
+            
+            // 更新塔位显示
+            this.updateTowerCount();
+            
+            // 显示成功提示
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification(`放置了 ${towerData.name} (${currentTowerCount + 1}/${this.gameState.maxTowers})`, 'success', 2000);
+            }
+            
+            console.log(`放置了 ${towerData.name} 塔 (${currentTowerCount + 1}/${this.gameState.maxTowers})`);
+            
+            // 从商店移除已购买的塔
+            const selectedTowerIndex = this.towerShop.getSelectedTowerIndex();
+            if (selectedTowerIndex >= 0) {
+                this.towerShop.removeTowerFromShop(selectedTowerIndex);
+            }
+            
+            // 检查是否可以触发合成
+            this.checkForCombinations();
+        }
+    }
+
+    updateMonsterPaths() {
+        if (this.monsters) {
+            this.monsters.children.entries.forEach(monster => {
+                if (monster && monster.updatePath) {
+                    monster.updatePath(this.pathFinder.getWorldPath());
+                }
+            });
+        }
+    }
+
+    upgradeLevel() {
+        const upgradeCost = this.getUpgradeCost();
+        
+        if (this.gameState.gold >= upgradeCost) {
+            this.gameState.gold -= upgradeCost;
+            this.gameState.level += 1;
+            this.gameState.maxTowers += 2; // 每级增加2个塔位
+            
+            // 通知UI更新
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.updateGold) {
+                uiScene.updateGold(this.gameState.gold);
+            }
+            if (uiScene && uiScene.updateLevel) {
+                uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
+            }
+            
+            console.log(`升级到等级 ${this.gameState.level}，可放置 ${this.gameState.maxTowers} 个塔`);
+            return true;
+        } else {
+            console.log(`升级失败：需要 ${upgradeCost} 金币，当前只有 ${this.gameState.gold} 金币`);
+            return false;
+        }
+    }
+
+    getUpgradeCost() {
+        // 升级费用随等级递增：50, 100, 200, 400, 800...
+        return 50 * Math.pow(2, this.gameState.level - 1);
+    }
+
+    updateTowerCount() {
+        // 更新塔位显示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.updateLevel) {
+            uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
+        }
+    }
+
+    deleteTower(tower) {
+        if (!tower || !tower.x || !tower.y) {
+            console.log('无效的塔');
+            return false;
+        }
+
+        // 找到塔所在的网格位置
+        const boardX = Math.floor((tower.x - 32) / 64);
+        const boardY = Math.floor((tower.y - 32) / 64);
+        
+        if (boardX < 0 || boardX >= this.boardWidth || boardY < 0 || boardY >= this.boardHeight) {
+            console.log('塔位置超出边界');
+            return false;
+        }
+
+        const tile = this.board[boardY][boardX];
+        if (!tile.tower || tile.tower !== tower) {
+            console.log('找不到对应的塔');
+            return false;
+        }
+
+        // 直接删除塔 - 玩家有权调整防御布局，不应被路径检查限制
+        tile.tower = null;
+        
+        // 从游戏组中移除
+        this.towers.remove(tower);
+        
+        // 销毁塔的所有视觉元素
+        tower.destroy();
+        
+        // 返还一部分金币（删除塔返还50%的费用）
+        const refund = Math.floor(ECONOMY_CONFIG.TOWER_SHOP_COST * 0.5);
+        this.gameState.gold += refund;
+        
+        // 更新所有活跃怪物的路径
+        this.updateMonsterPaths();
+        
+        // 清除选中状态
+        this.deselectTower();
+        
+        // 获取UI场景并更新显示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.updateGold) {
+            uiScene.updateGold(this.gameState.gold);
+        }
+        
+        // 更新塔位显示
+        this.updateTowerCount();
+        
+        // 显示金币返还提示
+        if (uiScene && uiScene.showNotification) {
+            uiScene.showNotification(`删除成功，返还 ${refund} 金币`, 'success', 2000);
+        }
+        
+        console.log(`删除了塔，返还 ${refund} 金币`);
+        return true;
+    }
+
+    spawnMonster(monsterData, x = null, y = null, isElite = false, modifiers = []) {
+        // 获取当前的动态路径，而不是固定的直线路径
+        const currentPath = this.pathFinder.getWorldPath();
+        const startPoint = currentPath[0];
+        const spawnX = x !== null ? x : startPoint.x;
+        const spawnY = y !== null ? y : startPoint.y;
+        
+        const monster = new Monster(this, spawnX, spawnY, monsterData, currentPath, isElite, modifiers);
+        this.monsters.add(monster);
+        return monster;
+    }
+
+    shouldProcessCollision(projectile, monster) {
+        // 如果是穿透投射物，检查是否已经击中过这个怪物
+        if (projectile.piercing && projectile.hitTargets) {
+            return !projectile.hitTargets.has(monster);
+        }
+        // 非穿透投射物总是处理碰撞
+        return true;
+    }
+
+    onProjectileHitMonster(projectile, monster) {
+        // 对怪物造成伤害
+        monster.takeDamage(projectile.damage);
+        
+        // 检查是否是穿透投射物
+        if (projectile.piercing) {
+            // 穿透投射物不立即销毁，记录已击中的怪物避免重复伤害
+            if (!projectile.hitTargets) {
+                projectile.hitTargets = new Set();
+            }
+            projectile.hitTargets.add(monster);
+            
+            // 创建击中效果但不销毁投射物
+            if (projectile.createHitEffect) {
+                projectile.createHitEffect();
+            }
+        } else {
+            // 非穿透投射物正常销毁
+            projectile.destroy();
+        }
+    }
+
+    onMonsterKilled(monster) {
+        // 金币奖励已经在Monster.die()中处理，这里只处理特殊提示
+        const goldEarned = monster.reward || ECONOMY_CONFIG.GOLD_PER_KILL;
+        
+        const uiScene = this.scene.get('UIScene');
+        
+        // 显示金币获得提示（BOSS击杀特殊提示）
+        if (uiScene && uiScene.showNotification) {
+            if (monster.isBoss) {
+                uiScene.showNotification(`击杀BOSS！获得 ${goldEarned} 金币`, 'success', 2500);
+            } else if (goldEarned > ECONOMY_CONFIG.GOLD_PER_KILL) {
+                uiScene.showNotification(`击杀精英！获得 ${goldEarned} 金币`, 'success', 1500);
+            }
+            // 普通怪物不显示提示，避免刷屏
+        }
+    }
+
+    onMonsterReachedEnd() {
+        this.gameState.health -= 10;
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.updateHealth) {
+            uiScene.updateHealth(this.gameState.health);
+        }
+        
+        // 显示生命值损失提示
+        if (uiScene && uiScene.showNotification) {
+            if (this.gameState.health <= 0) {
+                uiScene.showNotification('生命值归零！游戏结束！', 'error', 3000);
+            } else {
+                uiScene.showNotification(`生命值 -10！剩余 ${this.gameState.health}`, 'error', 2000);
+            }
+        }
+        
+        if (this.gameState.health <= 0) {
+            this.gameOver();
+        }
+    }
+
+    gameOver() {
+        this.gameState.isGameOver = true;
+        
+        // 完全清理所有活动组件
+        this.cleanupGameResources();
+        
+        // 通知UIScene显示游戏结束界面
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showGameOver) {
+            uiScene.showGameOver();
+        }
+        
+        console.log('游戏结束，所有资源已清理');
+    }
+
+    victory() {
+        this.gameState.isGameOver = true;
+        
+        // 完全清理所有活动组件
+        this.cleanupGameResources();
+        
+        // 通知UIScene显示胜利界面
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showVictory) {
+            uiScene.showVictory();
+        }
+        
+        console.log('游戏胜利，所有资源已清理');
+    }
+
+    cleanupGameResources() {
+        // 停止波次管理器
+        this.waveManager = null;
+        
+        // 停止塔商店
+        if (this.towerShop) {
+            this.towerShop.selectedTower = null;
+            this.towerShop = null;
+        }
+        
+        // 停止装备管理器
+        this.equipmentManager = null;
+        
+        // 清理所有计时器和动画
+        this.time.removeAllEvents();
+        this.tweens.killAll();
+        
+        // 停止塔的所有buff计时器
+        if (this.towers && this.towers.children) {
+            this.towers.children.entries.forEach(tower => {
+                if (tower.activeBuffs) {
+                    tower.activeBuffs.forEach(timer => {
+                        if (timer && timer.remove) {
+                            timer.remove();
+                        }
+                    });
+                    tower.activeBuffs.clear();
+                }
+            });
+        }
+        
+        // 停止所有怪物的移动动画
+        if (this.monsters && this.monsters.children) {
+            this.monsters.children.entries.forEach(monster => {
+                if (monster.moveTween) {
+                    monster.moveTween.destroy();
+                    monster.moveTween = null;
+                }
+            });
+        }
+        
+        // 停止所有投射物的追踪
+        if (this.projectiles && this.projectiles.children) {
+            this.projectiles.children.entries.forEach(projectile => {
+                projectile.useTrackingMovement = false;
+            });
+        }
+        
+        // 清除选中状态
+        if (this.selectedTower) {
+            this.selectedTower.hideRange();
+            this.selectedTower.setSelected(false);
+            this.selectedTower = null;
+        }
+        
+        console.log('资源清理完成');
+    }
+
+
+
+    update() {
+        if (this.gameState.isPaused || this.gameState.isGameOver) return;
+        
+        // 更新波次管理器
+        if (this.waveManager) {
+            this.waveManager.update();
+        }
+        
+        // 塔攻击逻辑
+        if (this.towers) {
+            this.towers.children.entries.forEach(tower => {
+                if (tower.update) {
+                    tower.update();
+                }
+            });
+        }
+        
+        // 更新怪物
+        if (this.monsters) {
+            this.monsters.children.entries.forEach(monster => {
+                if (monster.update) {
+                    monster.update();
+                }
+            });
+        }
+        
+        // 更新投射物
+        if (this.projectiles) {
+            this.projectiles.children.entries.forEach(projectile => {
+                if (projectile.update) {
+                    projectile.update();
+                }
+            });
+        }
+        
+        // 更新羁绊显示
+        this.updateSynergies();
+    }
+
+    updateSynergies() {
+        if (this.towers && this.towers.children.entries.length > 0) {
+            const towers = this.towers.children.entries.map(tower => tower.towerData);
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.updateSynergies) {
+                uiScene.updateSynergies(towers);
+            }
+        }
+    }
+
+    checkForCombinations() {
+        const towers = this.towers.children.entries;
+        
+        // 按类型和品质分组塔
+        const towerGroups = {};
+        
+        towers.forEach(tower => {
+            const key = `${tower.towerData.type}_${tower.towerData.rarity}`;
+            if (!towerGroups[key]) {
+                towerGroups[key] = [];
+            }
+            towerGroups[key].push(tower);
+        });
+        
+        // 检查每个组是否有3个或更多相同的塔
+        for (const [key, group] of Object.entries(towerGroups)) {
+            if (group.length >= 3) {
+                // 可以合成！选择其中3个塔进行合成
+                const towersToCombie = group.slice(0, 3);
+                this.performCombination(towersToCombie);
+                return; // 一次只处理一个合成
+            }
+        }
+    }
+
+    performCombination(towers) {
+        const towerDatas = towers.map(tower => tower.towerData);
+        const combinedTowerData = this.towerShop.combineTowers(towerDatas);
+        
+        if (!combinedTowerData) return;
+        
+        // 保留第一个塔的位置，删除其他两个
+        const keepTower = towers[0];
+        const removeTowers = towers.slice(1);
+        
+        // 找到保留塔的网格位置
+        const boardX = Math.floor((keepTower.x - 32) / 64);
+        const boardY = Math.floor((keepTower.y - 32) / 64);
+        
+        // 收集所有将被删除塔的装备
+        const allEquipments = [];
+        removeTowers.forEach(tower => {
+            if (tower.equipment && tower.equipment.length > 0) {
+                allEquipments.push(...tower.equipment);
+            }
+        });
+        
+        // 删除其他塔
+        removeTowers.forEach(tower => {
+            const towerBoardX = Math.floor((tower.x - 32) / 64);
+            const towerBoardY = Math.floor((tower.y - 32) / 64);
+            
+            if (towerBoardX >= 0 && towerBoardX < this.boardWidth && 
+                towerBoardY >= 0 && towerBoardY < this.boardHeight) {
+                this.board[towerBoardY][towerBoardX].tower = null;
+            }
+            
+            // 关键修复：如果被删除的塔是当前选中的塔，清除选中状态
+            if (this.selectedTower === tower) {
+                this.deselectTower();
+            }
+            
+            this.towers.remove(tower);
+            tower.destroy();
+        });
+        
+        // 将收集的装备转移到保留的塔上或返还给玩家
+        if (allEquipments.length > 0 && this.equipmentManager) {
+            this.transferEquipmentsToTower(keepTower, allEquipments);
+        }
+        
+        // 升级保留的塔
+        keepTower.upgrade(combinedTowerData);
+        
+        // 关键修复：同步更新棋盘格中的塔引用
+        if (boardX >= 0 && boardX < this.boardWidth && 
+            boardY >= 0 && boardY < this.boardHeight) {
+            this.board[boardY][boardX].tower = keepTower;
+        }
+        
+        // 显示合成特效
+        this.showCombinationEffect(keepTower.x, keepTower.y);
+        
+        // 通知UI
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            const rarityName = TOWER_RARITY[combinedTowerData.rarity].name;
+            uiScene.showNotification(`合成成功！获得 ${combinedTowerData.name} (${rarityName})`, 'success', 3000);
+        }
+        
+        // 更新塔位显示
+        this.updateTowerCount();
+        
+        console.log(`合成了 ${combinedTowerData.name} (${TOWER_RARITY[combinedTowerData.rarity].name})`);
+    }
+
+    transferEquipmentsToTower(keepTower, allEquipments) {
+        if (!keepTower.equipment) {
+            keepTower.equipment = [];
+        }
+        
+        const maxEquipmentSlots = 4; // 每个塔最多4个装备槽位
+        let transferredCount = 0;
+        let returnedCount = 0;
+        
+        for (const equipment of allEquipments) {
+            if (keepTower.equipment.length < maxEquipmentSlots) {
+                // 转移到保留的塔上
+                keepTower.equipment.push(equipment);
+                this.equipmentManager.applyEquipmentToTower(equipment, keepTower);
+                transferredCount++;
+            } else {
+                // 塔的装备槽位已满，返还给玩家背包
+                if (this.equipmentManager.addToInventory(equipment)) {
+                    returnedCount++;
+                }
+            }
+        }
+        
+        // 显示装备转移结果
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            if (transferredCount > 0 && returnedCount > 0) {
+                uiScene.showNotification(`转移装备 ${transferredCount} 件，返还背包 ${returnedCount} 件`, 'info', 2500);
+            } else if (transferredCount > 0) {
+                uiScene.showNotification(`成功转移装备 ${transferredCount} 件`, 'success', 2000);
+            } else if (returnedCount > 0) {
+                uiScene.showNotification(`装备已返还背包 ${returnedCount} 件`, 'info', 2000);
+            }
+        }
+        
+        // 更新装备UI
+        this.equipmentManager.updateTowerEquipmentUI(keepTower);
+        this.equipmentManager.updateInventoryUI();
+    }
+
+    showCombinationEffect(x, y) {
+        // 创建合成特效
+        const effect = this.add.circle(x, y, 40, 0xffd700, 0.8);
+        effect.setStrokeStyle(3, 0xffffff);
+        
+        // 特效动画
+        this.tweens.add({
+            targets: effect,
+            scaleX: 2,
+            scaleY: 2,
+            alpha: 0,
+            duration: 800,
+            ease: 'Power2',
+            onComplete: () => {
+                effect.destroy();
+            }
+        });
+        
+        // 添加文字提示
+        const text = this.add.text(x, y - 30, '合成!', {
+            fontSize: '24px',
+            fill: '#ffd700',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 2
+        });
+        text.setOrigin(0.5);
+        
+        this.tweens.add({
+            targets: text,
+            y: text.y - 40,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Power2',
+            onComplete: () => {
+                text.destroy();
+            }
+        });
+    }
+} 
