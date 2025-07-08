@@ -1,4 +1,4 @@
-import { TOWER_TYPES, TOWER_RARITY, ECONOMY_CONFIG } from '../config/GameConfig.js';
+import { TOWER_TYPES, TOWER_RARITY, ECONOMY_CONFIG, LEVEL_RARITY_MODIFIERS } from '../config/GameConfig.js';
 
 export class TowerShop {
     constructor(scene) {
@@ -88,11 +88,20 @@ export class TowerShop {
     }
 
     selectRandomRarity() {
+        const playerLevel = this.scene.gameState.level;
         const random = Math.random();
         let cumulative = 0;
         
-        for (const [rarityKey, rarityData] of Object.entries(TOWER_RARITY)) {
-            cumulative += rarityData.probability;
+        // 获取当前等级的概率配置
+        let levelModifiers = LEVEL_RARITY_MODIFIERS[playerLevel];
+        if (!levelModifiers) {
+            // 如果等级超过配置范围，使用最高等级的概率
+            const maxLevel = Math.max(...Object.keys(LEVEL_RARITY_MODIFIERS).map(Number));
+            levelModifiers = LEVEL_RARITY_MODIFIERS[maxLevel];
+        }
+        
+        for (const [rarityKey, probability] of Object.entries(levelModifiers)) {
+            cumulative += probability;
             if (random <= cumulative) {
                 return rarityKey;
             }

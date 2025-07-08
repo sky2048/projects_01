@@ -489,7 +489,7 @@ export class GameScene extends Phaser.Scene {
             return false;
         }
 
-        // 直接删除塔 - 玩家有权调整防御布局，不应被路径检查限制
+        // 直接删除塔 - 玩家有权调整攻击布局，不应被路径检查限制
         tile.tower = null;
         
         // 从游戏组中移除
@@ -809,25 +809,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     cleanupGameResources() {
-        // 停止波次管理器
-        this.waveManager = null;
-        
-        // 停止塔商店
-        if (this.towerShop) {
-            this.towerShop.selectedTower = null;
-            this.towerShop = null;
+        // 清除选中状态（需要在销毁对象前处理）
+        if (this.selectedTower) {
+            this.selectedTower.hideRange();
+            this.selectedTower.setSelected(false);
+            this.selectedTower = null;
         }
-        
-        // 停止装备管理器
-        this.equipmentManager = null;
         
         // 清理所有计时器和动画
         this.time.removeAllEvents();
         this.tweens.killAll();
         
-        // 停止塔的所有buff计时器
+        // 1. 清理并销毁所有塔
         if (this.towers && this.towers.children) {
             this.towers.children.entries.forEach(tower => {
+                // 停止塔的所有buff计时器
                 if (tower.activeBuffs) {
                     tower.activeBuffs.forEach(timer => {
                         if (timer && timer.remove) {
@@ -836,34 +832,104 @@ export class GameScene extends Phaser.Scene {
                     });
                     tower.activeBuffs.clear();
                 }
+                
+                // 清理塔的特效和射程指示器
+                if (tower.hideRange) {
+                    tower.hideRange();
+                }
+                
+                // 调用塔的销毁方法（如果存在）
+                if (tower.destroyVisuals) {
+                    tower.destroyVisuals();
+                }
+                
+                // 销毁塔对象
+                tower.destroy();
             });
+            
+            // 清空塔组
+            this.towers.clear(true, true);
         }
         
-        // 停止所有怪物的移动动画
+        // 2. 清理并销毁所有怪物
         if (this.monsters && this.monsters.children) {
             this.monsters.children.entries.forEach(monster => {
+                // 停止怪物的移动动画
                 if (monster.moveTween) {
                     monster.moveTween.destroy();
                     monster.moveTween = null;
                 }
+                
+                // 调用怪物的销毁方法（清理血条等UI元素）
+                if (monster.destroyVisuals) {
+                    monster.destroyVisuals();
+                }
+                
+                // 销毁怪物对象
+                monster.destroy();
             });
+            
+            // 清空怪物组
+            this.monsters.clear(true, true);
         }
         
-        // 停止所有投射物的追踪
+        // 3. 清理并销毁所有投射物
         if (this.projectiles && this.projectiles.children) {
             this.projectiles.children.entries.forEach(projectile => {
                 projectile.useTrackingMovement = false;
+                
+                // 调用投射物的销毁方法（如果存在）
+                if (projectile.destroyVisuals) {
+                    projectile.destroyVisuals();
+                }
+                
+                // 销毁投射物对象
+                projectile.destroy();
             });
+            
+            // 清空投射物组
+            this.projectiles.clear(true, true);
         }
         
-        // 清除选中状态
-        if (this.selectedTower) {
-            this.selectedTower.hideRange();
-            this.selectedTower.setSelected(false);
-            this.selectedTower = null;
+        // 4. 清理棋盘状态
+        if (this.board) {
+            for (let y = 0; y < this.boardHeight; y++) {
+                for (let x = 0; x < this.boardWidth; x++) {
+                    if (this.board[y] && this.board[y][x]) {
+                        // 清除棋盘格中的塔引用
+                        this.board[y][x].tower = null;
+                        
+                        // 销毁棋盘格的瓦片图形（如果需要重新创建）
+                        if (this.board[y][x].tile) {
+                            this.board[y][x].tile.destroy();
+                        }
+                    }
+                }
+            }
         }
         
-        console.log('资源清理完成');
+        // 5. 清理物理世界碰撞检测
+        if (this.physics && this.physics.world) {
+            this.physics.world.removeAllListeners();
+        }
+        
+        // 6. 销毁管理器（在对象销毁后）
+        this.waveManager = null;
+        
+        if (this.towerShop) {
+            this.towerShop.selectedTower = null;
+            this.towerShop = null;
+        }
+        
+        this.equipmentManager = null;
+        this.pathFinder = null;
+        
+        // 7. 清理其他引用
+        this.pathPoints = null;
+        this.isMovingTower = false;
+        this.towerToMove = null;
+        
+        console.log('资源清理完成 - 所有游戏对象已销毁');
     }
 
 
@@ -953,8 +1019,8 @@ export class GameScene extends Phaser.Scene {
         const removeTowers = towers.slice(1);
         
         // 找到保留塔的网格位置
-        const boardX = Math.floor((keepTower.x - 32) / 64);
-        const boardY = Math.floor((keepTower.y - 32) / 64);
+        const boardX = Math.floor((keepTower.x - this.boardOffsetX) / this.tileSize);
+        const boardY = Math.floor((keepTower.y - this.boardOffsetY) / this.tileSize);
         
         // 收集所有将被删除塔的装备
         const allEquipments = [];
@@ -966,8 +1032,8 @@ export class GameScene extends Phaser.Scene {
         
         // 删除其他塔
         removeTowers.forEach(tower => {
-            const towerBoardX = Math.floor((tower.x - 32) / 64);
-            const towerBoardY = Math.floor((tower.y - 32) / 64);
+            const towerBoardX = Math.floor((tower.x - this.boardOffsetX) / this.tileSize);
+            const towerBoardY = Math.floor((tower.y - this.boardOffsetY) / this.tileSize);
             
             if (towerBoardX >= 0 && towerBoardX < this.boardWidth && 
                 towerBoardY >= 0 && towerBoardY < this.boardHeight) {

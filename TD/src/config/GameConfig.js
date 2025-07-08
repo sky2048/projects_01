@@ -1,10 +1,33 @@
 // 塔的品质配置
 export const TOWER_RARITY = {
-    WHITE: { name: '白色', color: 0xffffff, probability: 0.6 },
-    GREEN: { name: '绿色', color: 0x00ff00, probability: 0.25 },
-    BLUE: { name: '蓝色', color: 0x0080ff, probability: 0.1 },
-    PURPLE: { name: '紫色', color: 0x8000ff, probability: 0.04 },
-    ORANGE: { name: '橙色', color: 0xff8000, probability: 0.01 }
+    WHITE: { name: '白色', color: 0xffffff, baseProbability: 0.6 },
+    GREEN: { name: '绿色', color: 0x00ff00, baseProbability: 0.25 },
+    BLUE: { name: '蓝色', color: 0x0080ff, baseProbability: 0.1 },
+    PURPLE: { name: '紫色', color: 0x8000ff, baseProbability: 0.04 },
+    ORANGE: { name: '橙色', color: 0xff8000, baseProbability: 0.01 }
+};
+
+// 根据等级调整塔品质概率 - 每2级解锁新品质
+export const LEVEL_RARITY_MODIFIERS = {
+    // 1-2级：只有白色和绿色
+    1: { WHITE: 0.7, GREEN: 0.3 },
+    2: { WHITE: 0.65, GREEN: 0.35 },
+    
+    // 3-4级：解锁蓝色
+    3: { WHITE: 0.55, GREEN: 0.35, BLUE: 0.1 },
+    4: { WHITE: 0.5, GREEN: 0.35, BLUE: 0.15 },
+    
+    // 5-6级：解锁紫色
+    5: { WHITE: 0.4, GREEN: 0.35, BLUE: 0.2, PURPLE: 0.05 },
+    6: { WHITE: 0.35, GREEN: 0.35, BLUE: 0.22, PURPLE: 0.08 },
+    
+    // 7-8级：解锁橙色
+    7: { WHITE: 0.3, GREEN: 0.32, BLUE: 0.25, PURPLE: 0.12, ORANGE: 0.01 },
+    8: { WHITE: 0.25, GREEN: 0.3, BLUE: 0.27, PURPLE: 0.15, ORANGE: 0.03 },
+    
+    // 9级及以上：最终概率分布
+    9: { WHITE: 0.2, GREEN: 0.28, BLUE: 0.3, PURPLE: 0.17, ORANGE: 0.05 },
+    10: { WHITE: 0.15, GREEN: 0.25, BLUE: 0.32, PURPLE: 0.2, ORANGE: 0.08 }
 };
 
 // 塔的类型和羁绊
@@ -31,7 +54,7 @@ export const TOWER_TYPES = {
         name: '坦克',
         synergy: 'GUARDIAN',
         baseStats: { damage: 15, range: 90, attackSpeed: 0.8 },
-        description: '防御型单位，可以阻挡敌人'
+        description: '重型攻击单位，攻击稳定可靠'
     },
     SUPPORT: {
         name: '辅助',
@@ -153,34 +176,34 @@ export const EQUIPMENT_CONFIG = {
         BELT: {
             id: 'BELT',
             name: '巨人腰带',
-            description: '+150 生命值',
-            icon: '🛡️',
+            description: '+10% 攻击伤害',
+            icon: '🥊',
             dropChance: 0.15,
-            effect: { health: 150 }
+            effect: { damage: 0.10 }
         },
         TEAR: {
             id: 'TEAR',
             name: '女神之泪',
-            description: '初始法力值+15，攻击时额外回复法力',
+            description: '+5% 射程，+5% 攻击速度',
             icon: '💧',
             dropChance: 0.15,
-            effect: { mana: 15, manaRegen: 0.2 }
+            effect: { range: 0.05, attackSpeed: 0.05 }
         },
         ARMOR: {
             id: 'ARMOR',
             name: '锁子甲',
-            description: '+20 物理护甲',
+            description: '+12% 攻击速度',
             icon: '⚔️',
             dropChance: 0.15,
-            effect: { physicalArmor: 20 }
+            effect: { attackSpeed: 0.12 }
         },
         CLOAK: {
             id: 'CLOAK',
             name: '负极斗篷',
-            description: '+20 魔法抗性',
+            description: '+8% 射程',
             icon: '🧙‍♂️',
             dropChance: 0.15,
-            effect: { magicResist: 20 }
+            effect: { range: 0.08 }
         },
         SWORD: {
             id: 'SWORD',

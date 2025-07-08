@@ -41,8 +41,8 @@ export class MenuScene extends Phaser.Scene {
         // 游戏说明
         const instructions = this.add.text(640, 500, 
             '游戏说明：\n' +
-            '• 购买和放置防御塔抵御怪物入侵\n' +
-            '• 相同防御塔可以合成升级\n' +
+            '• 购买和放置攻击塔消灭怪物\n' +
+            '• 相同攻击塔可以合成升级\n' +
             '• 不同塔之间有羁绊效果\n' +
             '• 20波后出现BOSS，击败BOSS即可胜利', {
             fontSize: '18px',

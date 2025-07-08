@@ -305,6 +305,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         // 沿路径前进一段距离
         let remainingDistance = distance;
         let newIndex = this.pathIndex;
+        let teleportedToSegmentMiddle = false;
         
         while (remainingDistance > 0 && newIndex < this.path.length - 1) {
             const currentPoint = this.path[newIndex];
@@ -321,11 +322,18 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
                 const ratio = remainingDistance / segmentLength;
                 this.x = currentPoint.x + (nextPoint.x - currentPoint.x) * ratio;
                 this.y = currentPoint.y + (nextPoint.y - currentPoint.y) * ratio;
+                teleportedToSegmentMiddle = true;
                 break;
             }
         }
         
-        this.pathIndex = newIndex;
+        // 修复路径索引设置：如果传送到路径段中间，设置为下一个路径点
+        // 这样moveToNextPoint()会让怪物继续前进而不是后退
+        if (teleportedToSegmentMiddle) {
+            this.pathIndex = newIndex + 1;
+        } else {
+            this.pathIndex = newIndex;
+        }
         
         // 停止当前移动并重新开始
         if (this.moveTween) {

@@ -4,7 +4,7 @@ export class EquipmentManager {
     constructor(scene) {
         this.scene = scene;
         this.inventory = []; // 玩家装备背包，最多8个槽位
-        this.autoCompose = true; // 自动合成功能
+        // 移除自动合成功能
         
         // 获取UI场景引用
         this.uiScene = scene.scene.get('UIScene');
@@ -61,10 +61,7 @@ export class EquipmentManager {
         
         this.inventory.push(equipment);
         
-        // 尝试自动合成
-        if (this.autoCompose) {
-            this.tryAutoCompose();
-        }
+        // 移除自动合成调用
         
         // 更新UI
         this.updateInventoryUI();
@@ -265,8 +262,7 @@ export class EquipmentManager {
             tower.originalStats = {
                 damage: tower.damage,
                 range: tower.range,
-                attackSpeed: tower.attackSpeed,
-                health: tower.health || 100
+                attackSpeed: tower.attackSpeed
             };
         }
         
@@ -328,7 +324,6 @@ export class EquipmentManager {
         tower.damage = tower.originalStats.damage;
         tower.range = tower.originalStats.range;
         tower.attackSpeed = tower.originalStats.attackSpeed;
-        tower.health = tower.originalStats.health;
         
         // 清除附加羁绊
         tower.additionalSynergies = [];
