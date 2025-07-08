@@ -9,11 +9,31 @@ export class TowerShop {
         this.currentOffers = [];
         this.isInitialized = true;
         
+        // 锁定系统
+        this.isLocked = false; // 整体锁定状态
+        this.lockedSlots = new Array(this.shopSlots).fill(false); // 每个槽位的锁定状态
+        
         // 立即生成初始商店物品，因为UI已经创建完成
         this.refreshShop();
     }
 
     refreshShop() {
+        // 如果商店被锁定，不进行刷新
+        if (this.isLocked) {
+            console.log('商店已锁定，无法刷新');
+            return;
+        }
+        
+        // 保存被锁定槽位的塔
+        const lockedTowers = [];
+        for (let i = 0; i < this.shopSlots; i++) {
+            if (this.lockedSlots[i]) {
+                lockedTowers[i] = this.currentOffers[i];
+            } else {
+                lockedTowers[i] = null;
+            }
+        }
+        
         this.currentOffers = [];
         
         // 刷新商店时清除选中的塔，防止利用漏洞
@@ -21,8 +41,14 @@ export class TowerShop {
         this.selectedTowerIndex = -1;
         
         for (let i = 0; i < this.shopSlots; i++) {
-            const tower = this.generateRandomTower();
-            this.currentOffers.push(tower);
+            if (this.lockedSlots[i] && lockedTowers[i]) {
+                // 保留锁定的塔
+                this.currentOffers.push(lockedTowers[i]);
+            } else {
+                // 生成新塔
+                const tower = this.generateRandomTower();
+                this.currentOffers.push(tower);
+            }
         }
         
         // 通知UI更新商店显示和清除选中状态
@@ -38,29 +64,27 @@ export class TowerShop {
     }
 
     generateRandomTower() {
-        // 随机选择塔的品质
-        const rarity = this.selectRandomRarity();
-        
-        // 随机选择塔的类型
         const towerTypes = Object.keys(TOWER_TYPES);
         const randomType = towerTypes[Math.floor(Math.random() * towerTypes.length)];
-        const towerType = TOWER_TYPES[randomType];
+        const towerTemplate = TOWER_TYPES[randomType];
         
-        // 根据品质调整属性
+        const rarity = this.selectRandomRarity();
         const rarityMultiplier = this.getRarityMultiplier(rarity);
         
-        return {
+        const tower = {
             id: this.generateId(),
             type: randomType,
-            name: towerType.name,
-            synergy: towerType.synergy,
+            name: towerTemplate.name,
+            synergy: towerTemplate.synergy,
             rarity: rarity,
-            damage: Math.floor(towerType.baseStats.damage * rarityMultiplier),
-            range: Math.floor(towerType.baseStats.range * rarityMultiplier),
-            attackSpeed: towerType.baseStats.attackSpeed * rarityMultiplier,
-            description: towerType.description,
+            damage: Math.floor(towerTemplate.baseStats.damage * rarityMultiplier),
+            range: Math.floor(towerTemplate.baseStats.range * rarityMultiplier),
+            attackSpeed: towerTemplate.baseStats.attackSpeed * rarityMultiplier,
+            description: towerTemplate.description,
             cost: ECONOMY_CONFIG.TOWER_SHOP_COST
         };
+        
+        return tower;
     }
 
     selectRandomRarity() {
@@ -93,8 +117,6 @@ export class TowerShop {
         return 'tower_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     }
 
-    // buyTower方法已移除，现在通过UI直接选择塔
-
     refreshShopPaid() {
         if (this.scene.gameState.gold >= ECONOMY_CONFIG.REFRESH_COST) {
             this.scene.gameState.gold -= ECONOMY_CONFIG.REFRESH_COST;
@@ -102,12 +124,69 @@ export class TowerShop {
             if (uiScene && uiScene.updateGold) {
                 uiScene.updateGold(this.scene.gameState.gold);
             }
+            
+            // 手动刷新时自动解除锁定
+            this.isLocked = false;
+            this.lockedSlots.fill(false);
+            
             this.refreshShop();
+            
+            // 更新UI锁定状态显示
+            if (uiScene && uiScene.updateLockButtonVisual) {
+                uiScene.updateLockButtonVisual(false);
+            }
+            if (uiScene && uiScene.updateShopLockVisuals) {
+                uiScene.updateShopLockVisuals();
+            }
+            
             return true;
         } else {
             console.log('金币不足，无法刷新');
             return false;
         }
+    }
+
+    // 切换商店锁定状态
+    toggleLock() {
+        this.isLocked = !this.isLocked;
+        
+        if (this.isLocked) {
+            // 锁定时，将当前所有有塔的槽位标记为锁定
+            for (let i = 0; i < this.shopSlots; i++) {
+                if (this.currentOffers[i]) {
+                    this.lockedSlots[i] = true;
+                }
+            }
+        } else {
+            // 解锁时，清除所有槽位的锁定状态
+            this.lockedSlots.fill(false);
+        }
+        
+        return this.isLocked;
+    }
+
+    // 切换单个槽位的锁定状态
+    toggleSlotLock(slotIndex) {
+        if (slotIndex >= 0 && slotIndex < this.shopSlots && this.currentOffers[slotIndex]) {
+            this.lockedSlots[slotIndex] = !this.lockedSlots[slotIndex];
+            return this.lockedSlots[slotIndex];
+        }
+        return false;
+    }
+
+    // 获取锁定状态
+    getIsLocked() {
+        return this.isLocked;
+    }
+
+    // 获取各槽位的锁定状态
+    getLockedSlots() {
+        return [...this.lockedSlots];
+    }
+
+    // 检查指定槽位是否被锁定
+    isSlotLocked(slotIndex) {
+        return slotIndex >= 0 && slotIndex < this.shopSlots && this.lockedSlots[slotIndex];
     }
 
     getSelectedTower() {

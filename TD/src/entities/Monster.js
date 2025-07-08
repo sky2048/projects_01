@@ -85,8 +85,9 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         // 血条背景
         this.healthBarBg = this.scene.add.rectangle(this.x, this.y - 25, 35, 5, 0x000000);
         
-        // 血条
+        // 血条 - 设置原点为左侧，这样缩放时会从右边减少
         this.healthBar = this.scene.add.rectangle(this.x, this.y - 25, 35, 5, 0x00ff00);
+        this.healthBar.setOrigin(0, 0.5);
         
         // BOSS标识
         if (this.isBoss) {
@@ -348,6 +349,10 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         const healthPercent = this.health / this.maxHealth;
         this.healthBar.scaleX = healthPercent;
         
+        // 调整血条位置，使其从左侧开始显示（血条原点已设为左侧）
+        const barWidth = 35;
+        this.healthBar.x = this.x - barWidth / 2;
+        
         // 根据血量改变颜色
         if (healthPercent > 0.6) {
             this.healthBar.setFillStyle(0x00ff00);
@@ -477,7 +482,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
             if (minion) {
                 // 小怪有特殊的视觉效果
                 minion.body_graphic.setScale(0.7);
-                minion.body_graphic.setTint(0xaaaaaa);
+                minion.body_graphic.setFillStyle(0xaaaaaa);
             }
         }
     }
@@ -538,7 +543,9 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         }
         
         if (this.healthBar) {
-            this.healthBar.x = this.x;
+            // 血条位置要与updateHealthBar方法保持一致（从左侧开始）
+            const barWidth = 35;
+            this.healthBar.x = this.x - barWidth / 2;
             this.healthBar.y = this.y - 25;
         }
         

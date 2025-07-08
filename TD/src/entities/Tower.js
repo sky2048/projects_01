@@ -449,10 +449,175 @@ export class Tower extends Phaser.Physics.Arcade.Sprite {
 
     showRange() {
         this.rangeIndicator.setVisible(true);
+        
+        // 创建删除按钮，位于攻击范围圆圈的右侧边缘
+        if (!this.deleteButtonBg) {
+            const deleteButtonX = this.x + this.range;
+            const deleteButtonY = this.y;
+            
+            // 删除按钮背景
+            this.deleteButtonBg = this.scene.add.circle(deleteButtonX, deleteButtonY, 15, 0xff0000, 0.8);
+            this.deleteButtonBg.setStrokeStyle(2, 0xffffff);
+            this.deleteButtonBg.setInteractive();
+            
+            // 删除按钮文字（×）
+            this.deleteButtonText = this.scene.add.text(deleteButtonX, deleteButtonY, '×', {
+                fontSize: '20px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold'
+            });
+            this.deleteButtonText.setOrigin(0.5);
+            
+            // 添加点击事件
+            this.deleteButtonBg.on('pointerdown', (pointer, localX, localY, event) => {
+                // 阻止事件冒泡到棋盘
+                event.stopPropagation();
+                this.handleDeleteClick();
+            });
+            
+            // 添加悬停效果
+            this.deleteButtonBg.on('pointerover', () => {
+                this.deleteButtonBg.setScale(1.1);
+                this.deleteButtonText.setScale(1.1);
+            });
+            
+            this.deleteButtonBg.on('pointerout', () => {
+                this.deleteButtonBg.setScale(1);
+                this.deleteButtonText.setScale(1);
+            });
+        }
+        
+        // 创建升级按钮，位于攻击范围圆圈的左侧边缘
+        if (!this.upgradeButtonBg) {
+            const upgradeButtonX = this.x - this.range;
+            const upgradeButtonY = this.y;
+            
+            // 升级按钮背景
+            this.upgradeButtonBg = this.scene.add.circle(upgradeButtonX, upgradeButtonY, 15, 0x00aa00, 0.8);
+            this.upgradeButtonBg.setStrokeStyle(2, 0xffffff);
+            this.upgradeButtonBg.setInteractive();
+            
+            // 升级按钮文字（↑）
+            this.upgradeButtonText = this.scene.add.text(upgradeButtonX, upgradeButtonY, '↑', {
+                fontSize: '20px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold'
+            });
+            this.upgradeButtonText.setOrigin(0.5);
+            
+            // 添加点击事件
+            this.upgradeButtonBg.on('pointerdown', (pointer, localX, localY, event) => {
+                // 阻止事件冒泡到棋盘
+                event.stopPropagation();
+                this.handleUpgradeClick();
+            });
+            
+            // 添加悬停效果
+            this.upgradeButtonBg.on('pointerover', () => {
+                this.upgradeButtonBg.setScale(1.1);
+                this.upgradeButtonText.setScale(1.1);
+            });
+            
+            this.upgradeButtonBg.on('pointerout', () => {
+                this.upgradeButtonBg.setScale(1);
+                this.upgradeButtonText.setScale(1);
+            });
+        }
+        
+        // 创建移动按钮，位于攻击范围圆圈的上方边缘
+        if (!this.moveButtonBg) {
+            const moveButtonX = this.x;
+            const moveButtonY = this.y - this.range;
+            
+            // 移动按钮背景
+            this.moveButtonBg = this.scene.add.circle(moveButtonX, moveButtonY, 15, 0x4a90e2, 0.8);
+            this.moveButtonBg.setStrokeStyle(2, 0xffffff);
+            this.moveButtonBg.setInteractive();
+            
+            // 移动按钮文字（↕）
+            this.moveButtonText = this.scene.add.text(moveButtonX, moveButtonY, '↕', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold'
+            });
+            this.moveButtonText.setOrigin(0.5);
+            
+            // 添加点击事件
+            this.moveButtonBg.on('pointerdown', (pointer, localX, localY, event) => {
+                // 阻止事件冒泡到棋盘
+                event.stopPropagation();
+                this.handleMoveClick();
+            });
+            
+            // 添加悬停效果
+            this.moveButtonBg.on('pointerover', () => {
+                this.moveButtonBg.setScale(1.1);
+                this.moveButtonText.setScale(1.1);
+            });
+            
+            this.moveButtonBg.on('pointerout', () => {
+                this.moveButtonBg.setScale(1);
+                this.moveButtonText.setScale(1);
+            });
+        }
     }
 
     hideRange() {
         this.rangeIndicator.setVisible(false);
+        
+        // 隐藏删除按钮
+        if (this.deleteButtonBg) {
+            this.deleteButtonBg.destroy();
+            this.deleteButtonBg = null;
+        }
+        if (this.deleteButtonText) {
+            this.deleteButtonText.destroy();
+            this.deleteButtonText = null;
+        }
+        
+        // 隐藏升级按钮
+        if (this.upgradeButtonBg) {
+            this.upgradeButtonBg.destroy();
+            this.upgradeButtonBg = null;
+        }
+        if (this.upgradeButtonText) {
+            this.upgradeButtonText.destroy();
+            this.upgradeButtonText = null;
+        }
+        
+        // 隐藏移动按钮
+        if (this.moveButtonBg) {
+            this.moveButtonBg.destroy();
+            this.moveButtonBg = null;
+        }
+        if (this.moveButtonText) {
+            this.moveButtonText.destroy();
+            this.moveButtonText = null;
+        }
+    }
+    
+    handleDeleteClick() {
+        // 调用场景的删除塔方法
+        if (this.scene.deleteTower) {
+            this.scene.deleteTower(this);
+        }
+    }
+    
+    handleUpgradeClick() {
+        // 调用场景的升级塔方法
+        if (this.scene.upgradeTower) {
+            this.scene.upgradeTower(this);
+        }
+    }
+    
+    handleMoveClick() {
+        // 调用场景的移动塔方法
+        if (this.scene.moveTower) {
+            this.scene.moveTower(this);
+        }
     }
 
     setSelected(selected) {
@@ -516,6 +681,12 @@ export class Tower extends Phaser.Physics.Arcade.Sprite {
         if (this.rangeIndicator) this.rangeIndicator.destroy();
         if (this.rarityText) this.rarityText.destroy();
         if (this.selectionIndicator) this.selectionIndicator.destroy();
+        if (this.deleteButtonBg) this.deleteButtonBg.destroy();
+        if (this.deleteButtonText) this.deleteButtonText.destroy();
+        if (this.upgradeButtonBg) this.upgradeButtonBg.destroy();
+        if (this.upgradeButtonText) this.upgradeButtonText.destroy();
+        if (this.moveButtonBg) this.moveButtonBg.destroy();
+        if (this.moveButtonText) this.moveButtonText.destroy();
         super.destroy();
     }
 } 

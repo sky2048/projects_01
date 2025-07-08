@@ -73,7 +73,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     updateTrailEffect() {
-        if (!this.trailParticles) return;
+        if (!this.trailParticles || !this.scene || !this.scene.time || !this.scene.add || !this.scene.tweens) return;
         
         const currentTime = this.scene.time.now;
         const timeScale = this.scene.physics.world.timeScale || 1;
@@ -108,11 +108,11 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         
         // 使用更精确的追踪方式，每帧更新目标位置
         this.useTrackingMovement = true;
-        this.moveStartTime = this.scene.time.now;
+        this.moveStartTime = this.scene && this.scene.time ? this.scene.time.now : 0;
     }
 
     updateTargetTracking() {
-        if (!this.useTrackingMovement) {
+        if (!this.useTrackingMovement || !this.scene || !this.scene.time) {
             return;
         }
         
@@ -159,7 +159,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         }
         
         // 检查是否超时（防止子弹无限追踪）
-        if (this.scene.time.now - this.moveStartTime > 3000) {
+        if (this.scene && this.scene.time && this.scene.time.now - this.moveStartTime > 3000) {
             this.destroy();
         }
     }
@@ -271,6 +271,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     createHitEffect() {
+        if (!this.scene || !this.scene.add || !this.scene.tweens) return;
+        
         // 击中爆炸效果
         const explosion = this.scene.add.circle(this.x, this.y, 5, 0xffff00, 0.8);
         
@@ -295,6 +297,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     createMagicExplosion() {
+        if (!this.scene || !this.scene.add || !this.scene.tweens) return;
+        
         // 魔法爆炸效果
         for (let i = 0; i < 6; i++) {
             const angle = (Math.PI * 2 / 6) * i;
@@ -312,6 +316,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     createShellExplosion() {
+        if (!this.scene || !this.scene.add || !this.scene.tweens) return;
+        
         // 炮弹爆炸效果
         const shockwave = this.scene.add.circle(this.x, this.y, 10, 0x808080, 0.3);
         
@@ -326,6 +332,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     applySplashDamage() {
+        if (!this.scene || !this.scene.monsters) return;
+        
         const monsters = this.scene.monsters.children.entries;
         
         for (const monster of monsters) {
@@ -358,7 +366,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     applySlowEffect() {
-        if (this.target && this.target.active) {
+        if (this.target && this.target.active && this.scene && this.scene.time) {
             // 应用缓慢效果（降低移动速度）
             const originalSpeed = this.target.speed;
             this.target.speed *= 0.5;
@@ -374,6 +382,9 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     update() {
+        // 安全检查：如果场景或物理体不存在，直接返回
+        if (!this.scene || !this.active) return;
+        
         // 更新目标追踪
         this.updateTargetTracking();
         

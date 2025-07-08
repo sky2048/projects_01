@@ -53,7 +53,7 @@ export class WaveManager {
         
         // 显示金币奖励提示
         if (uiScene && uiScene.showNotification) {
-            uiScene.showNotification(`获得 ${ECONOMY_CONFIG.GOLD_PER_WAVE} 金币奖励`, 'success', 1500);
+            uiScene.showNotification(`获得 ${ECONOMY_CONFIG.GOLD_PER_WAVE} 金币奖励`, 'success', 1500, 'left');
         }
         
         // 设置波次参数
@@ -181,6 +181,18 @@ export class WaveManager {
             uiScene.showWaveNotification(this.currentWave, false);
         }
         
+        // 给予经验奖励
+        if (this.scene.addExperience) {
+            const leveledUp = this.scene.addExperience(ECONOMY_CONFIG.EXP_PER_WAVE_END, '波次结束');
+            if (uiScene && uiScene.showNotification) {
+                if (leveledUp) {
+                    uiScene.showNotification(`获得 ${ECONOMY_CONFIG.EXP_PER_WAVE_END} 点经验！升级了！`, 'success', 2000, 'left');
+                } else {
+                    uiScene.showNotification(`获得 ${ECONOMY_CONFIG.EXP_PER_WAVE_END} 点经验`, 'success', 1500, 'left');
+                }
+            }
+        }
+        
         // 检查游戏是否结束
         if (this.currentWave >= WAVE_CONFIG.TOTAL_WAVES) {
             this.scene.victory();
@@ -197,11 +209,17 @@ export class WaveManager {
             }
         }
         
-        // 波次完成后自动刷新商店
+        // 波次完成后自动刷新商店（除非被锁定）
         if (this.scene.towerShop) {
-            this.scene.towerShop.refreshShop();
-            if (uiScene && uiScene.showNotification) {
-                uiScene.showNotification('商店已自动刷新！', 'info', 2000);
+            if (!this.scene.towerShop.getIsLocked()) {
+                this.scene.towerShop.refreshShop();
+                if (uiScene && uiScene.showNotification) {
+                    uiScene.showNotification('商店已自动刷新！', 'info', 2000);
+                }
+            } else {
+                if (uiScene && uiScene.showNotification) {
+                    uiScene.showNotification('商店已锁定，跳过自动刷新', 'info', 2000);
+                }
             }
         }
         

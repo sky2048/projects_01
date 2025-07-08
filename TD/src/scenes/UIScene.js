@@ -1,4 +1,4 @@
-import { TOWER_RARITY, SYNERGIES, ECONOMY_CONFIG, EQUIPMENT_CONFIG } from '../config/GameConfig.js';
+import { TOWER_RARITY, SYNERGIES, ECONOMY_CONFIG, EQUIPMENT_CONFIG, EXPERIENCE_CONFIG } from '../config/GameConfig.js';
 
 export class UIScene extends Phaser.Scene {
     constructor() {
@@ -37,52 +37,222 @@ export class UIScene extends Phaser.Scene {
     }
 
     createStatusBar() {
-        // 金币显示
-        this.goldIcon = this.add.circle(50, 30, 15, 0xffd700);
-        this.goldText = this.add.text(75, 30, '100', {
+        // 金币显示（移至商店上方，棋盘下方）
+        const goldDisplayY = 560; // 商店上方位置，避免重叠
+        const goldDisplayX = 640; // 屏幕中心位置
+        
+        // 梯形背景通用参数
+        const trapezoidWidth = 160;
+        const trapezoidHeight = 40;
+        const skew = 15; // 倾斜度
+        const spacing = 200; // 两个显示框之间的间距
+        
+        // 创建梯形路径
+        const trapezoidPoints = [
+            skew, 0,                           // 左上
+            trapezoidWidth, 0,                 // 右上  
+            trapezoidWidth - skew, trapezoidHeight, // 右下
+            0, trapezoidHeight                 // 左下
+        ];
+        
+        // 计算三个梯形的居中位置
+        const gapBetweenBoxes = 15; // 梯形之间的间隙
+        const totalWidth = trapezoidWidth * 3 + gapBetweenBoxes * 2;
+        
+        // 血量显示（左侧）
+        const healthDisplayX = goldDisplayX - trapezoidWidth - gapBetweenBoxes;
+        
+        this.healthBackground = this.add.polygon(healthDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
+        this.healthBackground.setStrokeStyle(3, 0xff4444, 1);
+        
+        // 血量内部渐变效果
+        this.healthBackgroundGlow = this.add.polygon(healthDisplayX, goldDisplayY, trapezoidPoints, 0x442222, 0.7);
+        
+        this.healthIcon = this.add.circle(healthDisplayX - 35, goldDisplayY, 12, 0xff4444);
+        this.healthIcon.setStrokeStyle(2, 0xff0000);
+        
+        this.healthText = this.add.text(healthDisplayX + 5, goldDisplayY, '100', {
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        this.healthText.setOrigin(0.5, 0.5);
+        
+        // 塔位显示（中间）
+        const towerLimitDisplayX = goldDisplayX;
+        
+        this.towerLimitBackground = this.add.polygon(towerLimitDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
+        this.towerLimitBackground.setStrokeStyle(3, 0x4488ff, 1);
+        
+        this.towerLimitBackgroundGlow = this.add.polygon(towerLimitDisplayX, goldDisplayY, trapezoidPoints, 0x223344, 0.7);
+        
+        this.towerLimitIcon = this.add.text(towerLimitDisplayX - 35, goldDisplayY, '🏰', {
+            fontSize: '16px'
+        });
+        this.towerLimitIcon.setOrigin(0.5);
+        
+        this.towerLimitText = this.add.text(towerLimitDisplayX + 5, goldDisplayY, '0/2', {
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        this.towerLimitText.setOrigin(0.5, 0.5);
+        
+        // 金币显示（右侧）
+        const goldRealDisplayX = goldDisplayX + trapezoidWidth + gapBetweenBoxes;
+        
+        this.goldBackground = this.add.polygon(goldRealDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
+        this.goldBackground.setStrokeStyle(3, 0xffd700, 1);
+        
+        // 金币内部渐变效果
+        this.goldBackgroundGlow = this.add.polygon(goldRealDisplayX, goldDisplayY, trapezoidPoints, 0x2c2c54, 0.7);
+        
+        this.goldIcon = this.add.circle(goldRealDisplayX - 35, goldDisplayY, 12, 0xffd700);
+        this.goldIcon.setStrokeStyle(2, 0xffaa00);
+        
+        this.goldText = this.add.text(goldRealDisplayX + 5, goldDisplayY, '100', {
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        this.goldText.setOrigin(0.5, 0.5);
+
+        // 波次显示（移至上方居中）
+        this.waveText = this.add.text(640, 30, '波次: 1/20', {
             fontSize: '24px',
             fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 2
         });
-        this.goldText.setOrigin(0, 0.5);
+        this.waveText.setOrigin(0.5, 0.5);
 
-        // 生命值显示
-        this.healthIcon = this.add.circle(200, 30, 15, 0xff0000);
-        this.healthText = this.add.text(225, 30, '100', {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.healthText.setOrigin(0, 0.5);
-
-        // 波次显示
-        this.waveText = this.add.text(400, 30, '波次: 1/20', {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.waveText.setOrigin(0, 0.5);
-
-        // 选中塔的信息显示
-        this.selectedTowerInfo = this.add.text(640, 30, '选择一个塔查看详情', {
-            fontSize: '18px',
+        // 选中塔的信息显示（移除重叠文本，仅在需要时显示）
+        this.selectedTowerInfo = this.add.text(640, 80, '', {
+            fontSize: '16px',
             fill: '#cccccc',
             fontFamily: 'Arial, sans-serif',
-            align: 'center'
+            align: 'center',
+            stroke: '#000000',
+            strokeThickness: 1
         });
         this.selectedTowerInfo.setOrigin(0.5);
 
-        // 等级和塔位信息（添加到左侧状态栏）
-        this.levelText = this.add.text(50, 70, '等级: 1', {
+        // 左侧信息显示区域 - 重新设计布局
+        const leftDisplayX = 180;
+        const leftInfoY = 600;
+        
+        // 等级显示 - 使用梯形背景
+        const levelTrapezoidWidth = 120;
+        const levelTrapezoidHeight = 35;
+        const levelSkew = 10;
+        
+        const levelTrapezoidPoints = [
+            levelSkew, 0,                           
+            levelTrapezoidWidth, 0,                 
+            levelTrapezoidWidth - levelSkew, levelTrapezoidHeight, 
+            0, levelTrapezoidHeight                 
+        ];
+        
+        this.levelBackground = this.add.polygon(leftDisplayX, leftInfoY, levelTrapezoidPoints, 0x1a1a2e);
+        this.levelBackground.setStrokeStyle(3, 0x9966ff, 1);
+        
+        this.levelBackgroundGlow = this.add.polygon(leftDisplayX, leftInfoY, levelTrapezoidPoints, 0x332244, 0.7);
+        
+        this.levelText = this.add.text(leftDisplayX, leftInfoY, '1级', {
             fontSize: '18px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        });
+        this.levelText.setOrigin(0.5, 0.5);
+
+        // 经验值显示 - 紧贴等级下方
+        this.experienceValueText = this.add.text(leftDisplayX, leftInfoY + 25, '0/10', {
+            fontSize: '14px',
+            fill: '#00ff88',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        });
+        this.experienceValueText.setOrigin(0.5, 0.5);
+
+        // 经验进度条 - 位于经验值下方
+        const expBarY = leftInfoY + 45;
+        const expBarWidth = 150;
+        const expBarHeight = 8;
+        
+        // 经验进度条背景
+        this.expBarBackground = this.add.rectangle(leftDisplayX, expBarY, expBarWidth, expBarHeight, 0x333333);
+        this.expBarBackground.setStrokeStyle(2, 0x666666);
+        
+        // 经验进度条前景
+        this.expBarForeground = this.add.rectangle(leftDisplayX - expBarWidth/2, expBarY, 0, expBarHeight, 0x00ff88);
+        this.expBarForeground.setOrigin(0, 0.5);
+        
+        // 购买经验按钮 - 放在经验进度条旁边
+        const expButtonWidth = 80;
+        const expButtonHeight = 25;
+        const expButtonX = leftDisplayX + 90;
+        const expButtonY = expBarY;
+        
+        this.upgradeButton = this.add.rectangle(expButtonX, expButtonY, expButtonWidth, expButtonHeight, 0x28a745);
+        this.upgradeText = this.add.text(expButtonX, expButtonY, `购买经验(${ECONOMY_CONFIG.EXP_BUTTON_COST})`, {
+            fontSize: '10px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
+        this.upgradeText.setOrigin(0.5);
 
-        this.towerLimitText = this.add.text(50, 95, '塔位: 0/2', {
-            fontSize: '16px',
-            fill: '#ffff00',
+        this.upgradeButton.setInteractive();
+        this.upgradeButton.on('pointerdown', () => {
+            const gameScene = this.scene.get('GameScene');
+            const result = gameScene.buyExperience();
+            
+            if (result.success) {
+                if (result.leveledUp) {
+                    this.showNotification(`获得 ${ECONOMY_CONFIG.EXP_PER_BUTTON_CLICK} 点经验！升级了！`, 'success', 2500);
+                } else {
+                    this.showNotification(`获得 ${ECONOMY_CONFIG.EXP_PER_BUTTON_CLICK} 点经验`, 'success', 1500);
+                }
+            } else {
+                this.showNotification(`金币不足！需要 ${ECONOMY_CONFIG.EXP_BUTTON_COST} 金币`, 'error', 2000);
+            }
+        });
+
+        // 刷新按钮 - 放在购买经验按钮下方
+        const refreshButtonX = expButtonX;
+        const refreshButtonY = expButtonY + 35;
+        
+        this.refreshButton = this.add.rectangle(refreshButtonX, refreshButtonY, expButtonWidth, expButtonHeight, 0x4a90e2);
+        this.refreshText = this.add.text(refreshButtonX, refreshButtonY, `刷新(${ECONOMY_CONFIG.REFRESH_COST})`, {
+            fontSize: '10px',
+            fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
+        });
+        this.refreshText.setOrigin(0.5);
+
+        this.refreshButton.setInteractive();
+        this.refreshButton.on('pointerdown', () => {
+            const gameScene = this.scene.get('GameScene');
+            if (gameScene.gameState.gold >= ECONOMY_CONFIG.REFRESH_COST) {
+                gameScene.towerShop.refreshShopPaid();
+                this.showNotification('商店已刷新', 'success', 1500);
+            } else {
+                this.showNotification(`金币不足！刷新需要 ${ECONOMY_CONFIG.REFRESH_COST} 金币`, 'error', 2000);
+            }
         });
 
         // 创建提示系统
@@ -101,61 +271,35 @@ export class UIScene extends Phaser.Scene {
     }
 
     createShop() {
-        // 商店标题
-        this.shopTitle = this.add.text(100, 590, '塔商店', {
-            fontSize: '20px',
+        // 锁定按钮 - 移到右侧
+        const buttonWidth = 120;  // 统一按钮宽度
+        const buttonHeight = 35;  // 统一按钮高度
+        const buttonX = 1150;     // 右侧X坐标位置
+        const startY = 580;       // 起始Y坐标
+        
+        // 锁定按钮
+        this.lockButton = this.add.rectangle(buttonX, startY, buttonWidth, buttonHeight, 0x6c757d);
+        this.lockText = this.add.text(buttonX, startY, '锁定', {
+            fontSize: '12px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
+        this.lockText.setOrigin(0.5);
 
-        // 刷新按钮移到右侧
-        this.refreshButton = this.add.rectangle(730, 590, 100, 30, 0x4a90e2);
-        this.refreshText = this.add.text(730, 590, `刷新 (${ECONOMY_CONFIG.REFRESH_COST}金)`, {
-            fontSize: '14px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.refreshText.setOrigin(0.5);
-
-        this.refreshButton.setInteractive();
-        this.refreshButton.on('pointerdown', () => {
-            const gameScene = this.scene.get('GameScene');
-            if (gameScene.gameState.gold >= ECONOMY_CONFIG.REFRESH_COST) {
-                gameScene.towerShop.refreshShopPaid();
-                this.showNotification('商店已刷新', 'success', 1500);
-            } else {
-                this.showNotification(`金币不足！刷新需要 ${ECONOMY_CONFIG.REFRESH_COST} 金币`, 'error', 2000);
-            }
+        this.lockButton.setInteractive();
+        this.lockButton.on('pointerdown', () => {
+            this.toggleShopLock();
         });
 
-        // 升级按钮（在刷新按钮旁边）
-        this.upgradeButton = this.add.rectangle(850, 590, 100, 30, 0x28a745);
-        this.upgradeText = this.add.text(850, 590, '升级 (50金)', {
-            fontSize: '14px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.upgradeText.setOrigin(0.5);
-
-        this.upgradeButton.setInteractive();
-        this.upgradeButton.on('pointerdown', () => {
-            const gameScene = this.scene.get('GameScene');
-            const upgradeCost = gameScene.getUpgradeCost();
-            
-            if (gameScene.gameState.gold >= upgradeCost) {
-                const success = gameScene.upgradeLevel();
-                if (success) {
-                    this.showNotification(`升级成功！等级 ${gameScene.gameState.level}，塔位 +2`, 'success', 2500);
-                }
-            } else {
-                this.showNotification(`金币不足！升级需要 ${upgradeCost} 金币`, 'error', 2000);
-            }
-        });
-
-        // 商店槽位
+        // 商店槽位 - 水平居中显示
         this.shopSlots = [];
+        const slotWidth = 120;
+        const slotSpacing = 130; // 槽位间隔
+        const totalSlotsWidth = (5 - 1) * slotSpacing + slotWidth; // 总宽度
+        const startX = (1280 - totalSlotsWidth) / 2 + slotWidth / 2; // 居中起始位置
+        
         for (let i = 0; i < 5; i++) {
-            const slotX = 100 + i * 130;
+            const slotX = startX + i * slotSpacing;
             const slotY = 650;
             
             const slot = this.createShopSlot(slotX, slotY, i);
@@ -176,8 +320,14 @@ export class UIScene extends Phaser.Scene {
 
         slot.background.setStrokeStyle(2, 0x4a4a6a);
         slot.background.setInteractive();
-        slot.background.on('pointerdown', () => {
-            this.buyTower(index);
+        slot.background.on('pointerdown', (pointer) => {
+            if (pointer.rightButtonDown()) {
+                // 右键点击锁定/解锁单个槽位
+                this.toggleSlotLock(index);
+            } else {
+                // 左键点击购买塔
+                this.buyTower(index);
+            }
         });
 
         slot.background.on('pointerover', (pointer) => {
@@ -207,8 +357,8 @@ export class UIScene extends Phaser.Scene {
     }
 
     createSynergyDisplay() {
-        // 羁绊显示标题移到左侧
-        this.synergyTitle = this.add.text(50, 400, '当前羁绊', {
+        // 羁绊显示标题移到左上角
+        this.synergyTitle = this.add.text(50, 120, '当前羁绊', {
             fontSize: '18px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
@@ -217,7 +367,7 @@ export class UIScene extends Phaser.Scene {
         // 羁绊列表
         this.synergyList = [];
         for (let i = 0; i < 5; i++) {
-            const synergyText = this.add.text(50, 430 + i * 25, '', {
+            const synergyText = this.add.text(50, 150 + i * 25, '', {
                 fontSize: '14px',
                 fill: '#cccccc',
                 fontFamily: 'Arial, sans-serif'
@@ -418,38 +568,6 @@ export class UIScene extends Phaser.Scene {
     }
 
     createControlButtons() {
-        // 取消选择按钮
-        this.cancelButton = this.add.rectangle(1050, 30, 80, 40, 0xff6b6b);
-        this.cancelText = this.add.text(1050, 30, '取消选择', {
-            fontSize: '14px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.cancelText.setOrigin(0.5);
-
-        this.cancelButton.setInteractive();
-        this.cancelButton.on('pointerdown', () => {
-            this.clearTowerSelection();
-        });
-
-        // 删除防御塔按钮
-        this.deleteButton = this.add.rectangle(1050, 80, 80, 40, 0xff4444);
-        this.deleteText = this.add.text(1050, 80, '删除塔', {
-            fontSize: '14px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
-        this.deleteText.setOrigin(0.5);
-
-        this.deleteButton.setInteractive();
-        this.deleteButton.on('pointerdown', () => {
-            this.deleteTower();
-        });
-
-        // 初始时隐藏删除按钮，只有选中塔时才显示
-        this.deleteButton.setVisible(false);
-        this.deleteText.setVisible(false);
-
         // 暂停按钮
         this.pauseButton = this.add.rectangle(1150, 30, 100, 40, 0x4a90e2);
         this.pauseText = this.add.text(1150, 30, '暂停', {
@@ -489,13 +607,19 @@ export class UIScene extends Phaser.Scene {
         if (this.healthText) {
             this.healthText.setText(amount.toString());
             
-            // 根据生命值改变颜色
+            // 根据生命值改变边框和图标颜色
             if (amount > 70) {
-                this.healthText.setFill('#00ff00');
+                this.healthBackground.setStrokeStyle(3, 0x44ff44, 1);
+                this.healthIcon.setFillStyle(0x44ff44);
+                this.healthIcon.setStrokeStyle(2, 0x00ff00);
             } else if (amount > 30) {
-                this.healthText.setFill('#ffff00');
+                this.healthBackground.setStrokeStyle(3, 0xffaa00, 1);
+                this.healthIcon.setFillStyle(0xffaa00);
+                this.healthIcon.setStrokeStyle(2, 0xff8800);
             } else {
-                this.healthText.setFill('#ff0000');
+                this.healthBackground.setStrokeStyle(3, 0xff4444, 1);
+                this.healthIcon.setFillStyle(0xff4444);
+                this.healthIcon.setStrokeStyle(2, 0xff0000);
             }
         }
     }
@@ -513,6 +637,7 @@ export class UIScene extends Phaser.Scene {
             if (slot.nameText) slot.nameText.destroy();
             if (slot.costText) slot.costText.destroy();
             if (slot.rarityBorder) slot.rarityBorder.destroy();
+            // 注意：不清除 lockIcon，因为锁定状态需要保持
             
             slot.icon = null;
             slot.nameText = null;
@@ -536,19 +661,19 @@ export class UIScene extends Phaser.Scene {
                 slot.rarityBorder.setStrokeStyle(3, rarityColor);
                 slot.rarityBorder.setFillStyle(0x000000, 0);
 
-                // 塔图标
-                slot.icon = this.createTowerIcon(slot.background.x, slot.background.y - 10, tower);
+                // 塔图标 - 居中显示
+                slot.icon = this.createTowerIcon(slot.background.x, slot.background.y - 5, tower);
 
-                // 塔名称
-                slot.nameText = this.add.text(slot.background.x, slot.background.y + 15, tower.name, {
+                // 塔名称 - 调整位置使布局更平衡
+                slot.nameText = this.add.text(slot.background.x, slot.background.y + 18, tower.name, {
                     fontSize: '12px',
                     fill: '#ffffff',
                     fontFamily: 'Arial, sans-serif'
                 });
                 slot.nameText.setOrigin(0.5);
 
-                // 费用
-                slot.costText = this.add.text(slot.background.x, slot.background.y + 30, `${tower.cost}金`, {
+                // 费用 - 调整位置使布局更平衡
+                slot.costText = this.add.text(slot.background.x, slot.background.y + 32, `${tower.cost}金`, {
                     fontSize: '10px',
                     fill: '#ffd700',
                     fontFamily: 'Arial, sans-serif'
@@ -564,30 +689,34 @@ export class UIScene extends Phaser.Scene {
                 slot.nameText.setOrigin(0.5);
             }
         }
+        
+        // 重新应用锁定视觉效果
+        this.updateShopLockVisuals();
     }
 
     createTowerIcon(x, y, tower) {
         let icon;
         const rarityColor = TOWER_RARITY[tower.rarity].color;
         
+        // 稍微增大图标尺寸，使其在槽位中更加突出和居中
         switch (tower.type) {
             case 'ARCHER':
-                icon = this.add.polygon(x, y, [0, -8, 6, 5, 0, 2, -6, 5], rarityColor);
+                icon = this.add.polygon(x, y, [0, -10, 7, 6, 0, 3, -7, 6], rarityColor);
                 break;
             case 'MAGE':
-                icon = this.add.star(x, y, 4, 6, 9, rarityColor);
+                icon = this.add.star(x, y, 4, 7, 11, rarityColor);
                 break;
             case 'ASSASSIN':
-                icon = this.add.triangle(x, y, 0, -8, 8, 8, -8, 8, rarityColor);
+                icon = this.add.triangle(x, y, 0, -10, 10, 10, -10, 10, rarityColor);
                 break;
             case 'TANK':
-                icon = this.add.rectangle(x, y, 12, 12, rarityColor);
+                icon = this.add.rectangle(x, y, 14, 14, rarityColor);
                 break;
             case 'SUPPORT':
-                icon = this.add.circle(x, y, 6, rarityColor);
+                icon = this.add.circle(x, y, 8, rarityColor);
                 break;
             default:
-                icon = this.add.circle(x, y, 6, rarityColor);
+                icon = this.add.circle(x, y, 8, rarityColor);
         }
         
         icon.setStrokeStyle(1, 0x000000);
@@ -716,7 +845,7 @@ export class UIScene extends Phaser.Scene {
         const gameScene = this.scene.get('GameScene');
         if (gameScene.towerShop) {
             gameScene.towerShop.selectedTower = null;
-            this.selectedTowerInfo.setText('选择一个塔查看详情');
+            this.selectedTowerInfo.setText('');
             // 重置所有商店槽位的高亮状态
             this.resetShopHighlight();
         }
@@ -745,55 +874,73 @@ export class UIScene extends Phaser.Scene {
                     `伤害: ${damage} | 射程: ${range} | 攻速: ${attackSpeed.toFixed(1)}`;
         this.selectedTowerInfo.setText(info);
         
-        // 显示删除按钮
-        if (this.deleteButton && this.deleteText) {
-            this.deleteButton.setVisible(true);
-            this.deleteText.setVisible(true);
-        }
+
     }
 
     clearSelectedTowerInfo() {
-        this.selectedTowerInfo.setText('从商店选择塔或点击已放置的塔');
-        
-        // 隐藏删除按钮
-        if (this.deleteButton && this.deleteText) {
-            this.deleteButton.setVisible(false);
-            this.deleteText.setVisible(false);
-        }
+        this.selectedTowerInfo.setText('');
     }
 
-    deleteTower() {
-        const gameScene = this.scene.get('GameScene');
-        if (!gameScene.selectedTower) {
-            this.showNotification('请先选择一个防御塔', 'warning', 2000);
-            return;
-        }
-        
-        // 调用游戏场景的删除方法
-        const success = gameScene.deleteTower(gameScene.selectedTower);
-        if (success) {
-            this.showNotification('防御塔已删除', 'success', 1500);
-        } else {
-            this.showNotification('无法删除该防御塔：会阻断怪物路径', 'error', 2500);
-        }
-    }
+
 
     updateLevel(level, maxTowers) {
         if (this.levelText) {
-            this.levelText.setText(`等级: ${level}`);
+            this.levelText.setText(`${level}级`);
         }
         
-        // 更新塔位显示
+        // 更新塔位显示（现在在中间的梯形）
         const gameScene = this.scene.get('GameScene');
         const currentTowers = gameScene.towers ? gameScene.towers.children.entries.length : 0;
         if (this.towerLimitText) {
-            this.towerLimitText.setText(`塔位: ${currentTowers}/${maxTowers}`);
+            this.towerLimitText.setText(`${currentTowers}/${maxTowers}`);
         }
         
-        // 更新升级按钮显示
-        const upgradeCost = gameScene.getUpgradeCost();
+        // 根据塔位使用情况改变颜色
+        if (this.towerLimitBackground && this.towerLimitIcon) {
+            const usage = currentTowers / maxTowers;
+            if (usage >= 1) {
+                // 塔位已满 - 红色
+                this.towerLimitBackground.setStrokeStyle(3, 0xff4444, 1);
+                this.towerLimitIcon.setText('🔴');
+            } else if (usage >= 0.8) {
+                // 塔位紧张 - 橙色
+                this.towerLimitBackground.setStrokeStyle(3, 0xffaa00, 1);
+                this.towerLimitIcon.setText('🟠');
+            } else {
+                // 塔位充足 - 蓝色
+                this.towerLimitBackground.setStrokeStyle(3, 0x4488ff, 1);
+                this.towerLimitIcon.setText('🏰');
+            }
+        }
+        
+        // 更新经验按钮显示
         if (this.upgradeText) {
-            this.upgradeText.setText(`升级 (${upgradeCost}金)`);
+            this.upgradeText.setText(`购买经验(${ECONOMY_CONFIG.EXP_BUTTON_COST})`);
+        }
+    }
+
+    updateExperience(currentExp, expRequiredForNext) {
+        // 更新经验数值显示
+        if (this.experienceValueText) {
+            this.experienceValueText.setText(`${currentExp}/${expRequiredForNext}`);
+        }
+        
+        // 更新经验进度条
+        if (this.expBarForeground && expRequiredForNext > 0) {
+            const progress = currentExp / expRequiredForNext;
+            const maxWidth = 150; // 进度条最大宽度
+            const currentWidth = maxWidth * progress;
+            
+            this.expBarForeground.setSize(currentWidth, 8);
+            
+            // 根据进度改变颜色
+            if (progress >= 0.8) {
+                this.expBarForeground.setFillStyle(0xffd700); // 金色 - 接近升级
+            } else if (progress >= 0.5) {
+                this.expBarForeground.setFillStyle(0x44ff44); // 绿色 - 中等进度
+            } else {
+                this.expBarForeground.setFillStyle(0x00ff88); // 青色 - 初始状态
+            }
         }
     }
 
@@ -801,6 +948,10 @@ export class UIScene extends Phaser.Scene {
         // 创建提示容器
         this.notifications = [];
         this.notificationY = 200; // 提示显示的起始Y位置
+        
+        // 左侧物品提示系统
+        this.itemNotifications = [];
+        this.itemNotificationY = 100;
     }
 
     createTooltipSystem() {
@@ -812,7 +963,23 @@ export class UIScene extends Phaser.Scene {
         };
     }
 
-    showNotification(message, type = 'info', duration = 2000) {
+    showNotification(message, type = 'info', duration = 2000, position = 'center') {
+        // 判断是否为物品相关提示（显示在左侧）
+        const isItemNotification = message.includes('获得装备') || 
+                                  message.includes('合成装备') || 
+                                  message.includes('装备已装备') ||
+                                  message.includes('装备背包') ||
+                                  message.includes('装备槽位') ||
+                                  message.includes('获得') && message.includes('金币') ||
+                                  message.includes('返还') && message.includes('金币') ||
+                                  message.includes('金币奖励') ||
+                                  position === 'left';
+
+        if (isItemNotification) {
+            this.showItemNotification(message, type, duration);
+            return;
+        }
+
         // 定义不同类型的颜色
         const colors = {
             'info': '#ffffff',
@@ -866,6 +1033,60 @@ export class UIScene extends Phaser.Scene {
         });
     }
 
+    showItemNotification(message, type = 'info', duration = 2000) {
+        // 定义不同类型的颜色
+        const colors = {
+            'info': '#ffffff',
+            'warning': '#ffaa00',
+            'error': '#ff4444',
+            'success': '#44ff44'
+        };
+        
+        const bgColors = {
+            'info': 0x333333,
+            'warning': 0x664400,
+            'error': 0x441111,
+            'success': 0x114411
+        };
+
+        // 左侧位置：X=200，小尺寸
+        const bg = this.add.rectangle(200, this.itemNotificationY, 280, 40, bgColors[type], 0.85);
+        bg.setStrokeStyle(1, 0x666666);
+        
+        // 创建提示文字
+        const text = this.add.text(200, this.itemNotificationY, message, {
+            fontSize: '14px',
+            fill: colors[type],
+            fontFamily: 'Arial, sans-serif',
+            align: 'center',
+            wordWrap: { width: 260 }
+        });
+        text.setOrigin(0.5);
+
+        // 添加到物品提示列表
+        const notification = { bg, text, startY: this.itemNotificationY };
+        this.itemNotifications.push(notification);
+        
+        // 更新下一个提示的位置
+        this.itemNotificationY += 50;
+
+        // 淡入动画
+        bg.setAlpha(0);
+        text.setAlpha(0);
+        
+        this.tweens.add({
+            targets: [bg, text],
+            alpha: 1,
+            duration: 200,
+            ease: 'Power2'
+        });
+
+        // 自动消失
+        this.time.delayedCall(duration, () => {
+            this.hideItemNotification(notification);
+        });
+    }
+
     hideNotification(notification) {
         if (!notification.bg || !notification.text) return;
 
@@ -911,21 +1132,66 @@ export class UIScene extends Phaser.Scene {
         this.notificationY = 200 + this.notifications.length * 60;
     }
 
+    hideItemNotification(notification) {
+        if (!notification.bg || !notification.text) return;
+
+        // 淡出动画
+        this.tweens.add({
+            targets: [notification.bg, notification.text],
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+                // 销毁元素
+                if (notification.bg) notification.bg.destroy();
+                if (notification.text) notification.text.destroy();
+                
+                // 从列表中移除
+                const index = this.itemNotifications.indexOf(notification);
+                if (index > -1) {
+                    this.itemNotifications.splice(index, 1);
+                }
+                
+                // 重新排列剩余提示
+                this.rearrangeItemNotifications();
+            }
+        });
+    }
+
+    rearrangeItemNotifications() {
+        this.itemNotificationY = 100;
+        
+        this.itemNotifications.forEach((notification, index) => {
+            const targetY = 100 + index * 50;
+            
+            if (notification.bg && notification.text) {
+                this.tweens.add({
+                    targets: [notification.bg, notification.text],
+                    y: targetY,
+                    duration: 300,
+                    ease: 'Power2'
+                });
+            }
+        });
+        
+        this.itemNotificationY = 100 + this.itemNotifications.length * 50;
+    }
+
     // 波次提示系统
     showWaveNotification(wave, isStart = true) {
         if (isStart) {
             if (wave === 20) {
-                this.showNotification(`第 ${wave} 波开始！BOSS波次！`, 'error', 3000);
+                this.showNotification(`第 ${wave} 波开始！BOSS波次！`, 'error', 3000, 'center');
             } else if (wave % 5 === 0) {
-                this.showNotification(`第 ${wave} 波开始！精英波次！`, 'warning', 2500);
+                this.showNotification(`第 ${wave} 波开始！精英波次！`, 'warning', 2500, 'center');
             } else {
-                this.showNotification(`第 ${wave} 波开始`, 'info', 2000);
+                this.showNotification(`第 ${wave} 波开始`, 'info', 2000, 'center');
             }
         } else {
             if (wave === 20) {
-                this.showNotification('恭喜！击败了BOSS！', 'success', 3000);
+                this.showNotification('恭喜！击败了BOSS！', 'success', 3000, 'center');
             } else {
-                this.showNotification(`第 ${wave} 波完成`, 'success', 1500);
+                this.showNotification(`第 ${wave} 波完成`, 'success', 1500, 'center');
             }
         }
     }
@@ -1135,6 +1401,7 @@ export class UIScene extends Phaser.Scene {
     setUIInteractive(interactive) {
         // 禁用/启用主要UI元素的交互
         if (this.refreshButton) this.refreshButton.setInteractive(interactive);
+        if (this.lockButton) this.lockButton.setInteractive(interactive);
         if (this.upgradeButton) this.upgradeButton.setInteractive(interactive);
         if (this.pauseButton) this.pauseButton.setInteractive(interactive);
         if (this.speedButton) this.speedButton.setInteractive(interactive);
@@ -1144,6 +1411,80 @@ export class UIScene extends Phaser.Scene {
         this.shopSlots.forEach(slot => {
             if (slot.background) slot.background.setInteractive(interactive);
         });
+    }
+
+    // 切换商店锁定状态
+    toggleShopLock() {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.towerShop) {
+            const isLocked = gameScene.towerShop.toggleLock();
+            this.updateLockButtonVisual(isLocked);
+            this.updateShopLockVisuals();
+            
+            if (isLocked) {
+                this.showNotification('商店已锁定，波次结束后不会自动刷新', 'info', 2500);
+            } else {
+                this.showNotification('商店已解锁', 'info', 1500);
+            }
+        }
+    }
+
+    // 更新锁定按钮的视觉效果
+    updateLockButtonVisual(isLocked) {
+        if (this.lockButton && this.lockText) {
+            if (isLocked) {
+                this.lockButton.setFillStyle(0xffc107); // 黄色表示已锁定
+                this.lockText.setText('🔒解锁');
+            } else {
+                this.lockButton.setFillStyle(0x6c757d); // 灰色表示未锁定
+                this.lockText.setText('锁定');
+            }
+        }
+    }
+
+    // 切换单个槽位的锁定状态
+    toggleSlotLock(slotIndex) {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.towerShop) {
+            const wasLocked = gameScene.towerShop.toggleSlotLock(slotIndex);
+            this.updateShopLockVisuals();
+            
+            if (wasLocked) {
+                this.showNotification(`槽位 ${slotIndex + 1} 已锁定`, 'info', 1500);
+            } else {
+                this.showNotification(`槽位 ${slotIndex + 1} 已解锁`, 'info', 1500);
+            }
+        }
+    }
+
+    // 更新商店槽位的锁定视觉效果
+    updateShopLockVisuals() {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.towerShop && this.shopSlots) {
+            const lockedSlots = gameScene.towerShop.getLockedSlots();
+            
+            this.shopSlots.forEach((slot, index) => {
+                if (lockedSlots[index]) {
+                    // 添加锁定图标
+                    if (!slot.lockIcon) {
+                        slot.lockIcon = this.add.text(slot.background.x + 45, slot.background.y - 30, '🔒', {
+                            fontSize: '16px'
+                        });
+                        slot.lockIcon.setOrigin(0.5);
+                    }
+                    // 添加锁定边框效果
+                    slot.background.setStrokeStyle(3, 0xffc107);
+                } else {
+                    // 移除锁定图标
+                    if (slot.lockIcon) {
+                        slot.lockIcon.destroy();
+                        slot.lockIcon = null;
+                    }
+                    // 恢复正常边框
+                    slot.background.setStrokeStyle(2, 0x4a4a6a);
+                }
+            });
+        }
     }
 
     // 清理游戏结束界面

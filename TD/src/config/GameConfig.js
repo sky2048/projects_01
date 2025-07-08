@@ -104,7 +104,30 @@ export const ECONOMY_CONFIG = {
     TOWER_SHOP_COST: 15,
     REFRESH_COST: 2,
     STARTING_LEVEL: 1,
-    UPGRADE_COST_BASE: 50
+    UPGRADE_COST_BASE: 50,
+    // 经验系统配置
+    EXP_PER_BUTTON_CLICK: 4,  // 点击升级按钮获得的经验
+    EXP_PER_WAVE_END: 2,      // 每波结束自动获得的经验
+    EXP_BUTTON_COST: 4        // 点击经验按钮需要的金币
+};
+
+// 经验等级系统
+export const EXPERIENCE_CONFIG = {
+    // 计算每个等级需要的经验值
+    getExpRequiredForLevel: (level) => {
+        // 等级1需要10经验，之后每级递增5经验
+        // 等级1: 10, 等级2: 15, 等级3: 20, 等级4: 25...
+        return 5 + (level * 5);
+    },
+    
+    // 获取总共需要的经验值（从1级到目标等级）
+    getTotalExpRequiredForLevel: (targetLevel) => {
+        let totalExp = 0;
+        for (let level = 1; level <= targetLevel; level++) {
+            totalExp += EXPERIENCE_CONFIG.getExpRequiredForLevel(level);
+        }
+        return totalExp;
+    }
 };
 
 // 装备系统配置

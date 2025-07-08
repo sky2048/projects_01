@@ -1,4 +1,4 @@
-import { MAP_CONFIG, ECONOMY_CONFIG, WAVE_CONFIG, TOWER_RARITY } from '../config/GameConfig.js';
+import { MAP_CONFIG, ECONOMY_CONFIG, WAVE_CONFIG, TOWER_RARITY, EXPERIENCE_CONFIG } from '../config/GameConfig.js';
 import { PathFinder } from '../utils/PathFinder.js';
 import { Monster } from '../entities/Monster.js';
 import { Tower } from '../entities/Tower.js';
@@ -78,6 +78,7 @@ export class GameScene extends Phaser.Scene {
             isPaused: false,
             isGameOver: false,
             level: 1,  // 玩家等级
+            experience: 0,  // 当前经验值
             maxTowers: 2  // 最大可放置塔数量，初始2个
         };
         
@@ -162,6 +163,9 @@ export class GameScene extends Phaser.Scene {
         if (uiScene && uiScene.updateLevel) {
             uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
         }
+        if (uiScene && uiScene.updateExperience) {
+            uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+        }
         if (uiScene && uiScene.updateGold) {
             console.log('初始化UI金币显示:', this.gameState.gold);
             uiScene.updateGold(this.gameState.gold);
@@ -203,6 +207,13 @@ export class GameScene extends Phaser.Scene {
             
             console.log(`tile信息: isPath=${tile.isPath}, hasTower=${!!tile.tower}`);
             console.log(`towerShop状态: exists=${!!this.towerShop}, selectedTower=${!!this.towerShop?.selectedTower}`);
+            console.log(`移动状态: isMovingTower=${!!this.isMovingTower}, towerToMove=${!!this.towerToMove}`);
+            
+            // 检查是否在移动塔的模式
+            if (this.isMovingTower && this.towerToMove) {
+                this.completeTowerMove(boardX, boardY);
+                return;
+            }
             
             if (tile.tower) {
                 // 点击已有的塔 - 选择它
@@ -242,6 +253,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     deselectTower() {
+        // 如果正在移动塔，先取消移动
+        if (this.isMovingTower) {
+            this.cancelTowerMove();
+        }
+        
         if (this.selectedTower) {
             this.selectedTower.hideRange();
             this.selectedTower.setSelected(false);
@@ -356,9 +372,6 @@ export class GameScene extends Phaser.Scene {
             if (selectedTowerIndex >= 0) {
                 this.towerShop.removeTowerFromShop(selectedTowerIndex);
             }
-            
-            // 检查是否可以触发合成
-            this.checkForCombinations();
         }
     }
 
@@ -372,34 +385,75 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    upgradeLevel() {
-        const upgradeCost = this.getUpgradeCost();
+    addExperience(amount, source = 'unknown') {
+        this.gameState.experience += amount;
         
-        if (this.gameState.gold >= upgradeCost) {
-            this.gameState.gold -= upgradeCost;
-            this.gameState.level += 1;
-            this.gameState.maxTowers += 2; // 每级增加2个塔位
+        console.log(`获得 ${amount} 点经验 (来源: ${source})，当前经验: ${this.gameState.experience}`);
+        
+        // 检查是否可以升级
+        let leveledUp = false;
+        while (this.canLevelUp()) {
+            this.levelUp();
+            leveledUp = true;
+        }
+        
+        // 通知UI更新
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.updateExperience) {
+            uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+        }
+        if (leveledUp && uiScene && uiScene.updateLevel) {
+            uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
+        }
+        
+        return leveledUp;
+    }
+
+    buyExperience() {
+        if (this.gameState.gold >= ECONOMY_CONFIG.EXP_BUTTON_COST) {
+            this.gameState.gold -= ECONOMY_CONFIG.EXP_BUTTON_COST;
+            const leveledUp = this.addExperience(ECONOMY_CONFIG.EXP_PER_BUTTON_CLICK, '购买');
             
-            // 通知UI更新
+            // 更新金币显示
             const uiScene = this.scene.get('UIScene');
             if (uiScene && uiScene.updateGold) {
                 uiScene.updateGold(this.gameState.gold);
             }
-            if (uiScene && uiScene.updateLevel) {
-                uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
-            }
             
-            console.log(`升级到等级 ${this.gameState.level}，可放置 ${this.gameState.maxTowers} 个塔`);
-            return true;
+            return { success: true, leveledUp };
         } else {
-            console.log(`升级失败：需要 ${upgradeCost} 金币，当前只有 ${this.gameState.gold} 金币`);
-            return false;
+            console.log(`购买经验失败：需要 ${ECONOMY_CONFIG.EXP_BUTTON_COST} 金币，当前只有 ${this.gameState.gold} 金币`);
+            return { success: false, leveledUp: false };
         }
     }
 
+    canLevelUp() {
+        const expRequiredForNext = this.getExpRequiredForNextLevel();
+        return this.gameState.experience >= expRequiredForNext;
+    }
+
+    levelUp() {
+        const expRequiredForNext = this.getExpRequiredForNextLevel();
+        this.gameState.experience -= expRequiredForNext;
+        this.gameState.level += 1;
+        this.gameState.maxTowers += 2; // 每级增加2个塔位
+        
+        console.log(`升级到等级 ${this.gameState.level}！可放置 ${this.gameState.maxTowers} 个塔`);
+        
+        // 显示升级提示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            uiScene.showNotification(`升级成功！等级 ${this.gameState.level}，塔位 +2`, 'success', 2500);
+        }
+    }
+
+    getExpRequiredForNextLevel() {
+        return EXPERIENCE_CONFIG.getExpRequiredForLevel(this.gameState.level + 1);
+    }
+
     getUpgradeCost() {
-        // 升级费用随等级递增：50, 100, 200, 400, 800...
-        return 50 * Math.pow(2, this.gameState.level - 1);
+        // 现在改为经验按钮的费用，固定50金币
+        return ECONOMY_CONFIG.EXP_BUTTON_COST;
     }
 
     updateTowerCount() {
@@ -416,9 +470,12 @@ export class GameScene extends Phaser.Scene {
             return false;
         }
 
-        // 找到塔所在的网格位置
-        const boardX = Math.floor((tower.x - 32) / 64);
-        const boardY = Math.floor((tower.y - 32) / 64);
+        // 找到塔所在的网格位置（使用正确的棋盘配置）
+        const boardX = Math.floor((tower.x - this.boardOffsetX) / this.tileSize);
+        const boardY = Math.floor((tower.y - this.boardOffsetY) / this.tileSize);
+        
+        console.log(`删除塔坐标转换: 世界坐标(${tower.x}, ${tower.y}) -> 网格坐标(${boardX}, ${boardY})`);
+        console.log(`棋盘配置: 偏移(${this.boardOffsetX}, ${this.boardOffsetY}), 网格大小${this.tileSize}`);
         
         if (boardX < 0 || boardX >= this.boardWidth || boardY < 0 || boardY >= this.boardHeight) {
             console.log('塔位置超出边界');
@@ -428,6 +485,7 @@ export class GameScene extends Phaser.Scene {
         const tile = this.board[boardY][boardX];
         if (!tile.tower || tile.tower !== tower) {
             console.log('找不到对应的塔');
+            console.log(`tile.tower存在: ${!!tile.tower}, 是否匹配: ${tile.tower === tower}`);
             return false;
         }
 
@@ -461,11 +519,180 @@ export class GameScene extends Phaser.Scene {
         
         // 显示金币返还提示
         if (uiScene && uiScene.showNotification) {
-            uiScene.showNotification(`删除成功，返还 ${refund} 金币`, 'success', 2000);
+            uiScene.showNotification(`删除成功`, 'success', 1500, 'center');
+            uiScene.showNotification(`返还 ${refund} 金币`, 'success', 2000, 'left');
         }
         
         console.log(`删除了塔，返还 ${refund} 金币`);
         return true;
+    }
+
+    upgradeTower(tower) {
+        if (!tower || !tower.x || !tower.y) {
+            console.log('无效的塔');
+            return false;
+        }
+
+        // 检查是否可以进行三合一升级
+        const sameTypeTowers = this.towers.children.entries.filter(t => 
+            t !== tower && 
+            t.towerData.type === tower.towerData.type && 
+            t.rarity === tower.rarity
+        );
+
+        if (sameTypeTowers.length >= 2) {
+            // 执行三合一升级
+            const towersToUpgrade = [tower, sameTypeTowers[0], sameTypeTowers[1]];
+            this.performCombination(towersToUpgrade);
+            return true;
+        } else {
+            // 提示无法升级
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                const needCount = 2 - sameTypeTowers.length;
+                uiScene.showNotification(`需要再${needCount}个相同类型和品质的塔才能升级`, 'warning', 2500, 'center');
+            }
+            return false;
+        }
+    }
+
+    moveTower(tower) {
+        if (!tower || !tower.x || !tower.y) {
+            console.log('无效的塔');
+            return false;
+        }
+
+        // 进入移动模式
+        this.isMovingTower = true;
+        this.towerToMove = tower;
+        
+        // 找到塔当前所在的网格位置
+        const boardX = Math.floor((tower.x - this.boardOffsetX) / this.tileSize);
+        const boardY = Math.floor((tower.y - this.boardOffsetY) / this.tileSize);
+        
+        if (boardX < 0 || boardX >= this.boardWidth || boardY < 0 || boardY >= this.boardHeight) {
+            console.log('塔位置超出边界');
+            return false;
+        }
+
+        // 记录原始位置
+        this.originalTowerPosition = { boardX, boardY };
+        
+        // 从原位置移除塔（但不销毁）
+        this.board[boardY][boardX].tower = null;
+        
+        // 隐藏塔的范围和按钮
+        tower.hideRange();
+        tower.setSelected(false);
+        
+        // 给塔添加半透明效果表示正在移动
+        tower.setAlpha(0.6);
+        
+        // 显示提示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            uiScene.showNotification('选择新位置放置塔', 'info', 3000, 'center');
+        }
+        
+        console.log(`开始移动塔，原位置: (${boardX}, ${boardY})`);
+        return true;
+    }
+
+    completeTowerMove(newBoardX, newBoardY) {
+        if (!this.isMovingTower || !this.towerToMove) return;
+        
+        const tile = this.board[newBoardY][newBoardX];
+        
+        // 检查目标位置是否有效
+        if (tile.isPath) {
+            // 不能移动到路径上
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification('不能将塔移动到路径上', 'error', 2000);
+            }
+            this.cancelTowerMove();
+            return;
+        }
+        
+        if (tile.tower) {
+            // 目标位置已有塔
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification('目标位置已有塔', 'error', 2000);
+            }
+            this.cancelTowerMove();
+            return;
+        }
+        
+        // 临时放置塔来测试路径
+        const tempTower = { isTemp: true };
+        tile.tower = tempTower;
+        
+        // 检查移动塔后是否还有有效路径
+        if (!this.pathFinder.hasValidPath()) {
+            // 移除临时塔
+            tile.tower = null;
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.showNotification) {
+                uiScene.showNotification('无法移动到此位置：会阻断怪物路径', 'error', 2500);
+            }
+            this.cancelTowerMove();
+            return;
+        }
+        
+        // 移除临时塔，执行真正的移动
+        tile.tower = null;
+        
+        // 计算新的世界坐标
+        const newWorldX = this.boardOffsetX + newBoardX * this.tileSize + this.tileSize / 2;
+        const newWorldY = this.boardOffsetY + newBoardY * this.tileSize + this.tileSize / 2;
+        
+        // 移动塔到新位置
+        this.towerToMove.x = newWorldX;
+        this.towerToMove.y = newWorldY;
+        
+        // 更新塔的视觉元素位置
+        this.towerToMove.updateVisuals();
+        
+        // 在棋盘上设置塔
+        tile.tower = this.towerToMove;
+        
+        // 恢复塔的正常透明度
+        this.towerToMove.setAlpha(1);
+        
+        // 更新所有活跃怪物的路径
+        this.updateMonsterPaths();
+        
+        // 清除移动状态
+        this.isMovingTower = false;
+        this.towerToMove = null;
+        this.originalTowerPosition = null;
+        
+        // 显示成功提示
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            uiScene.showNotification('塔移动成功', 'success', 1500);
+        }
+        
+        console.log(`塔移动完成: 新位置 (${newBoardX}, ${newBoardY})`);
+    }
+
+    cancelTowerMove() {
+        if (!this.isMovingTower || !this.towerToMove) return;
+        
+        // 将塔放回原位置
+        const { boardX, boardY } = this.originalTowerPosition;
+        this.board[boardY][boardX].tower = this.towerToMove;
+        
+        // 恢复塔的正常透明度
+        this.towerToMove.setAlpha(1);
+        
+        // 清除移动状态
+        this.isMovingTower = false;
+        this.towerToMove = null;
+        this.originalTowerPosition = null;
+        
+        console.log('塔移动已取消');
     }
 
     spawnMonster(monsterData, x = null, y = null, isElite = false, modifiers = []) {
@@ -520,9 +747,11 @@ export class GameScene extends Phaser.Scene {
         // 显示金币获得提示（BOSS击杀特殊提示）
         if (uiScene && uiScene.showNotification) {
             if (monster.isBoss) {
-                uiScene.showNotification(`击杀BOSS！获得 ${goldEarned} 金币`, 'success', 2500);
-            } else if (goldEarned > ECONOMY_CONFIG.GOLD_PER_KILL) {
-                uiScene.showNotification(`击杀精英！获得 ${goldEarned} 金币`, 'success', 1500);
+                uiScene.showNotification(`击杀BOSS！`, 'success', 2500, 'center');
+                uiScene.showNotification(`获得 ${goldEarned} 金币`, 'success', 2000, 'left');
+            } else if (monster.isElite) {
+                uiScene.showNotification(`击杀精英！`, 'success', 1500, 'center');
+                uiScene.showNotification(`获得 ${goldEarned} 金币`, 'success', 1500, 'left');
             }
             // 普通怪物不显示提示，避免刷屏
         }
@@ -538,9 +767,9 @@ export class GameScene extends Phaser.Scene {
         // 显示生命值损失提示
         if (uiScene && uiScene.showNotification) {
             if (this.gameState.health <= 0) {
-                uiScene.showNotification('生命值归零！游戏结束！', 'error', 3000);
+                uiScene.showNotification('生命值归零！游戏结束！', 'error', 3000, 'center');
             } else {
-                uiScene.showNotification(`生命值 -10！剩余 ${this.gameState.health}`, 'error', 2000);
+                uiScene.showNotification(`生命值 -10！剩余 ${this.gameState.health}`, 'error', 2000, 'center');
             }
         }
         
@@ -775,7 +1004,7 @@ export class GameScene extends Phaser.Scene {
         const uiScene = this.scene.get('UIScene');
         if (uiScene && uiScene.showNotification) {
             const rarityName = TOWER_RARITY[combinedTowerData.rarity].name;
-            uiScene.showNotification(`合成成功！获得 ${combinedTowerData.name} (${rarityName})`, 'success', 3000);
+            uiScene.showNotification(`合成成功！获得 ${combinedTowerData.name} (${rarityName})`, 'success', 3000, 'center');
         }
         
         // 更新塔位显示
