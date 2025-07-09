@@ -229,6 +229,7 @@ export class SynergyUI {
     }
 
     updateSynergies(towers) {
+        console.log('towers:', towers.map(t => ({synergy: t.synergy, additionalSynergies: t.additionalSynergies})));
         // 统计羁绊
         const synergyCount = {};
         
@@ -243,6 +244,8 @@ export class SynergyUI {
                 });
             }
         });
+
+        console.log('synergyCount:', synergyCount);
 
         // 清空当前显示数据
         this.synergyDisplayData.clear();
@@ -265,7 +268,8 @@ export class SynergyUI {
                     }
                 }
                 
-                const isActivated = activeLevel && count >= 2;
+                // 修复：只有当真正找到激活等级时才认为是激活状态
+                const isActivated = activeLevel !== null;
                 
                 synergyDataList.push({
                     synergyKey: synergyKey,

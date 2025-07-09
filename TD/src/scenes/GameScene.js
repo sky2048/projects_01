@@ -360,10 +360,7 @@ export class GameScene extends Phaser.Scene {
             // 更新塔位显示
             this.updateTowerCount();
             
-            // 显示成功提示
-            if (uiScene && uiScene.showNotification) {
-                uiScene.showNotification(`放置了 ${towerData.name} (${currentTowerCount + 1}/${this.gameState.maxTowers})`, 'success', 2000);
-            }
+
             
             console.log(`放置了 ${towerData.name} 塔 (${currentTowerCount + 1}/${this.gameState.maxTowers})`);
             

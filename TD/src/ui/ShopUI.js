@@ -116,7 +116,9 @@ export class ShopUI {
     }
 
     updateShop(offers) {
-        // 清除现有内容
+        // 清除现有内容和选中状态
+        this.resetShopHighlight();
+        
         this.shopSlots.forEach(slot => {
             if (slot.icon) slot.icon.destroy();
             if (slot.nameText) slot.nameText.destroy();
@@ -207,13 +209,62 @@ export class ShopUI {
 
     resetShopHighlight() {
         this.shopSlots.forEach(slot => {
+            // 重置背景颜色
             slot.background.setFillStyle(0x3a3a5a);
+            slot.background.setStrokeStyle(2, 0x4a4a6a);
+            
+            // 移除选中指示器
+            if (slot.selectedIndicator) {
+                slot.selectedIndicator.destroy();
+                slot.selectedIndicator = null;
+            }
+            
+            // 重置缩放
+            slot.background.setScale(1);
+            if (slot.icon) slot.icon.setScale(1);
+            if (slot.nameText) slot.nameText.setScale(1);
+            if (slot.costText) slot.costText.setScale(1);
+            if (slot.rarityBorder) slot.rarityBorder.setScale(1);
         });
     }
 
     highlightSlot(index) {
         if (this.shopSlots[index]) {
-            this.shopSlots[index].background.setFillStyle(0x5a5a7a);
+            const slot = this.shopSlots[index];
+            
+            // 更亮的背景色和金色边框
+            slot.background.setFillStyle(0x7a7a9a);
+            slot.background.setStrokeStyle(4, 0xffd700);
+            
+            // 轻微放大效果
+            slot.background.setScale(1.05);
+            if (slot.icon) slot.icon.setScale(1.05);
+            if (slot.nameText) slot.nameText.setScale(1.05);
+            if (slot.costText) slot.costText.setScale(1.05);
+            if (slot.rarityBorder) slot.rarityBorder.setScale(1.05);
+            
+            // 添加选中指示器（金色光环）
+            if (!slot.selectedIndicator) {
+                slot.selectedIndicator = this.scene.add.circle(
+                    slot.background.x, 
+                    slot.background.y, 
+                    65, 
+                    0xffd700, 
+                    0
+                );
+                slot.selectedIndicator.setStrokeStyle(3, 0xffd700, 0.8);
+                slot.selectedIndicator.setDepth(-1); // 确保在背景之下
+                
+                // 添加闪烁效果
+                this.scene.tweens.add({
+                    targets: slot.selectedIndicator,
+                    alpha: { from: 0.8, to: 0.3 },
+                    duration: 800,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
         }
     }
 
