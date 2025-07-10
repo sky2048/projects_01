@@ -404,7 +404,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         this.scene.gameState.gold += this.reward;
         const uiScene = this.scene.scene.get('UIScene');
         if (uiScene && uiScene.updateGold) {
-            uiScene.updateGold(this.scene.gameState.gold);
+            uiScene.updateGold(this.scene.gameState.gold, this.reward);
         }
         
         // 死亡特效

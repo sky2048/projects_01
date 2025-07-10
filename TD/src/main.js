@@ -3,7 +3,7 @@ import { MenuScene } from './scenes/MenuScene.js';
 import { UIScene } from './scenes/UIScene.js';
 
 const config = {
-    type: Phaser.AUTO,
+    type: Phaser.WEBGL,  // 强制使用WebGL渲染器
     title: '自走棋塔防 v0.1.2',
     description: '云顶之弈风格的塔防游戏',
     version: '0.1.2',
@@ -11,21 +11,30 @@ const config = {
     width: 1280,
     height: 720,
     backgroundColor: '#1a1a2e',
-    pixelArt: false,
+    pixelArt: false,  // 关闭像素艺术模式
+    antialias: true,  // 启用抗锯齿
     scene: [
         MenuScene,
         GameScene,
         UIScene
     ],
     scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.FIT,  // 等比缩放，保持宽高比
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 1280,
+        height: 720
     },
     physics: {
         default: 'arcade',
         arcade: {
             debug: false
         }
+    },
+    render: {
+        antialias: true,  // 启用抗锯齿
+        mipmapFilter: 'LINEAR_MIPMAP_LINEAR',  // 使用高质量纹理过滤
+        roundPixels: true,  // 启用像素对齐，提高文字清晰度
+        powerPreference: 'high-performance'  // 使用高性能GPU
     }
 }
 

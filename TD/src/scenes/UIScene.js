@@ -23,6 +23,11 @@ export class UIScene extends Phaser.Scene {
     }
 
     create() {
+        console.log('UIScene create 开始...');
+        
+        // 清理之前的UI元素（如果存在）
+        this.clearPreviousUI();
+        
         // 创建UI背景
         this.createUIBackground();
         
@@ -49,6 +54,36 @@ export class UIScene extends Phaser.Scene {
         
         // 发送ready事件，通知GameScene可以初始化管理器
         this.events.emit('ready');
+    }
+
+    clearPreviousUI() {
+        // 清理之前的UI模块
+        if (this.statusUI) {
+            this.statusUI = null;
+        }
+        if (this.shopUI) {
+            this.shopUI = null;
+        }
+        if (this.synergyUI) {
+            this.synergyUI = null;
+        }
+        if (this.equipmentUI) {
+            this.equipmentUI = null;
+        }
+        if (this.notificationUI) {
+            this.notificationUI = null;
+        }
+        if (this.tooltipUI) {
+            this.tooltipUI = null;
+        }
+        
+        // 清理背景
+        if (this.shopBackground) {
+            this.shopBackground.destroy();
+            this.shopBackground = null;
+        }
+        
+        console.log('之前的UI已清理');
     }
 
     createUIBackground() {
@@ -148,21 +183,27 @@ export class UIScene extends Phaser.Scene {
     }
 
     // 委托方法 - 更新状态栏数据
-    updateGold(amount) {
+    updateGold(amount, changeAmount = null) {
         if (this.statusUI) {
-            this.statusUI.updateGold(amount);
+            this.statusUI.updateGold(amount, changeAmount);
         }
     }
 
-    updateHealth(amount) {
+    updateHealth(amount, changeAmount = null) {
         if (this.statusUI) {
-            this.statusUI.updateHealth(amount);
+            this.statusUI.updateHealth(amount, changeAmount);
         }
     }
 
     updateWave(wave) {
         if (this.statusUI) {
             this.statusUI.updateWave(wave);
+        }
+    }
+
+    updateMapName(mapName) {
+        if (this.statusUI) {
+            this.statusUI.updateMapName(mapName);
         }
     }
 
@@ -250,9 +291,9 @@ export class UIScene extends Phaser.Scene {
     }
 
     // 委托方法 - Tooltip相关
-    showTowerTooltip(x, y, tower) {
+    showTowerTooltip(x, y, tower, slotIndex = null) {
         if (this.tooltipUI) {
-            this.tooltipUI.showTooltip(x, y, tower);
+            this.tooltipUI.showTooltip(x, y, tower, slotIndex);
         }
     }
 
@@ -300,9 +341,31 @@ export class UIScene extends Phaser.Scene {
     }
 
     createControlButtons() {
+        // 返回主界面按钮（右上角）
+        this.menuButton = this.add.rectangle(1150, 30, 100, 40, 0x6c757d);
+        this.menuText = this.add.text(1150, 30, '返回菜单', {
+            fontSize: '16px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif'
+        });
+        this.menuText.setOrigin(0.5);
+
+        this.menuButton.setInteractive();
+        this.menuButton.on('pointerdown', () => {
+            this.returnToMenu();
+        });
+
+        this.menuButton.on('pointerover', () => {
+            this.menuButton.setFillStyle(0x7d868f);
+        });
+
+        this.menuButton.on('pointerout', () => {
+            this.menuButton.setFillStyle(0x6c757d);
+        });
+
         // 暂停按钮
-        this.pauseButton = this.add.rectangle(1150, 30, 100, 40, 0x4a90e2);
-        this.pauseText = this.add.text(1150, 30, '暂停', {
+        this.pauseButton = this.add.rectangle(1150, 80, 100, 40, 0x4a90e2);
+        this.pauseText = this.add.text(1150, 80, '暂停', {
             fontSize: '18px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
@@ -315,8 +378,8 @@ export class UIScene extends Phaser.Scene {
         });
 
         // 加速按钮
-        this.speedButton = this.add.rectangle(1150, 80, 100, 40, 0x4a90e2);
-        this.speedText = this.add.text(1150, 80, '加速', {
+        this.speedButton = this.add.rectangle(1150, 130, 100, 40, 0x4a90e2);
+        this.speedText = this.add.text(1150, 130, '加速', {
             fontSize: '18px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
@@ -355,6 +418,96 @@ export class UIScene extends Phaser.Scene {
             gameScene.tweens.timeScale = 1;
             gameScene.time.timeScale = 1;
             this.speedText.setText('加速');
+        }
+    }
+
+    returnToMenu() {
+        // 显示确认对话框
+        this.showConfirmDialog(
+            '确定要返回主菜单吗？',
+            '当前游戏进度将会丢失',
+            () => {
+                // 确认返回菜单
+                this.scene.stop('GameScene');
+                this.scene.stop('UIScene');
+                this.scene.start('MenuScene');
+            },
+            () => {
+                // 取消，什么都不做
+            }
+        );
+    }
+
+    showConfirmDialog(title, message, onConfirm, onCancel) {
+        // 半透明黑色背景
+        this.confirmOverlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.5);
+        
+        // 对话框背景
+        this.confirmDialog = this.add.rectangle(640, 360, 400, 200, 0x2c2c54);
+        this.confirmDialog.setStrokeStyle(2, 0x4a90e2);
+        
+        // 标题文本
+        const titleText = this.add.text(640, 300, title, {
+            fontSize: '20px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold'
+        });
+        titleText.setOrigin(0.5);
+        
+        // 消息文本
+        const messageText = this.add.text(640, 340, message, {
+            fontSize: '16px',
+            fill: '#cccccc',
+            fontFamily: 'Arial, sans-serif',
+            align: 'center'
+        });
+        messageText.setOrigin(0.5);
+        
+        // 确认按钮
+        const confirmButton = this.add.rectangle(580, 400, 80, 35, 0xff4444);
+        const confirmText = this.add.text(580, 400, '确定', {
+            fontSize: '16px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif'
+        });
+        confirmText.setOrigin(0.5);
+        
+        // 取消按钮
+        const cancelButton = this.add.rectangle(700, 400, 80, 35, 0x6c757d);
+        const cancelText = this.add.text(700, 400, '取消', {
+            fontSize: '16px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif'
+        });
+        cancelText.setOrigin(0.5);
+        
+        // 按钮交互
+        confirmButton.setInteractive();
+        confirmButton.on('pointerdown', () => {
+            this.hideConfirmDialog();
+            onConfirm();
+        });
+        
+        cancelButton.setInteractive();
+        cancelButton.on('pointerdown', () => {
+            this.hideConfirmDialog();
+            onCancel();
+        });
+        
+        // 保存对话框元素
+        this.confirmElements = [
+            this.confirmOverlay, this.confirmDialog, titleText, messageText,
+            confirmButton, confirmText, cancelButton, cancelText
+        ];
+    }
+
+    hideConfirmDialog() {
+        if (this.confirmElements) {
+            this.confirmElements.forEach(element => {
+                if (element) element.destroy();
+            });
+            this.confirmElements = null;
         }
     }
 
@@ -482,6 +635,7 @@ export class UIScene extends Phaser.Scene {
         if (this.statusUI) this.statusUI.setInteractive(interactive);
         if (this.shopUI) this.shopUI.setInteractive(interactive);
         if (this.equipmentUI) this.equipmentUI.setInteractive(interactive);
+        if (this.menuButton) this.menuButton.setInteractive(interactive);
         if (this.pauseButton) this.pauseButton.setInteractive(interactive);
         if (this.speedButton) this.speedButton.setInteractive(interactive);
     }
@@ -509,5 +663,48 @@ export class UIScene extends Phaser.Scene {
         
         // 重新启用UI交互
         this.setUIInteractive(true);
+    }
+
+    // 场景关闭时的清理方法
+    shutdown() {
+        console.log('UIScene shutdown 开始清理资源...');
+        
+        // 清理游戏结束UI
+        this.clearGameOverUI();
+        
+        // 清理确认对话框
+        this.hideConfirmDialog();
+        
+        // 清理所有UI模块
+        this.statusUI = null;
+        this.shopUI = null;
+        this.synergyUI = null;
+        this.equipmentUI = null;
+        this.notificationUI = null;
+        this.tooltipUI = null;
+        
+        // 清理背景
+        if (this.shopBackground) {
+            this.shopBackground.destroy();
+            this.shopBackground = null;
+        }
+        
+        // 清理控制按钮
+        if (this.pauseButton) {
+            this.pauseButton.destroy();
+            this.pauseButton = null;
+        }
+        
+        if (this.speedButton) {
+            this.speedButton.destroy();
+            this.speedButton = null;
+        }
+        
+        if (this.menuButton) {
+            this.menuButton.destroy();
+            this.menuButton = null;
+        }
+        
+        console.log('UIScene shutdown 清理完成');
     }
 } 

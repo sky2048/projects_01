@@ -156,16 +156,17 @@ export class SynergyUI {
             visible: false
         };
         
-        // 设置交互
+        // 设置交互 - 让整个羁绊区域都可以交互
         hexBackground.setInteractive();
+        underlay.setInteractive();
         
-        // 鼠标悬停效果
-        hexBackground.on('pointerover', (pointer) => {
+        // 创建统一的鼠标事件处理函数
+        const onPointerOver = (pointer) => {
             hexBackground.setFillStyle(config.color, 0.6);
             this.scene.showSynergyTooltip(pointer.worldX, pointer.worldY, synergyKey);
-        });
+        };
         
-        hexBackground.on('pointerout', () => {
+        const onPointerOut = () => {
             const synergyData = this.synergyDisplayData.get(synergyKey);
             if (synergyData) {
                 hexBackground.setFillStyle(config.color, 0.9);
@@ -173,13 +174,23 @@ export class SynergyUI {
                 hexBackground.setFillStyle(0x2a2a2a, 0.8);
             }
             this.scene.hideSynergyTooltip();
-        });
+        };
         
-        hexBackground.on('pointermove', (pointer) => {
+        const onPointerMove = (pointer) => {
             if (this.scene.synergyTooltip && this.scene.synergyTooltip.visible) {
                 this.scene.showSynergyTooltip(pointer.worldX, pointer.worldY, synergyKey);
             }
-        });
+        };
+        
+        // 为六边形背景设置鼠标事件
+        hexBackground.on('pointerover', onPointerOver);
+        hexBackground.on('pointerout', onPointerOut);
+        hexBackground.on('pointermove', onPointerMove);
+        
+        // 为衬底背景设置相同的鼠标事件
+        underlay.on('pointerover', onPointerOver);
+        underlay.on('pointerout', onPointerOut);
+        underlay.on('pointermove', onPointerMove);
         
         // 初始隐藏
         this.setSynergyHexagonVisibility(hexagon, false);
@@ -229,7 +240,6 @@ export class SynergyUI {
     }
 
     updateSynergies(towers) {
-        console.log('towers:', towers.map(t => ({synergy: t.synergy, additionalSynergies: t.additionalSynergies})));
         // 统计羁绊
         const synergyCount = {};
         
@@ -244,8 +254,6 @@ export class SynergyUI {
                 });
             }
         });
-
-        console.log('synergyCount:', synergyCount);
 
         // 清空当前显示数据
         this.synergyDisplayData.clear();

@@ -13,13 +13,14 @@ export class TooltipUI {
     }
 
     // 显示塔的tooltip
-    showTooltip(x, y, tower) {
+    showTooltip(x, y, tower, slotIndex = null) {
         this.hideTooltip();
 
         // 创建tooltip内容
         const rarityInfo = TOWER_RARITY[tower.rarity];
-        const content = [
-            `${tower.name} (${rarityInfo.name})`,
+        const contentLines = [
+            `${tower.name}`,
+            `品质: ${rarityInfo.name}`,
             `类型: ${this.getTowerTypeName(tower.type)}`,
             `伤害: ${tower.damage}`,
             `射程: ${tower.range}`,
@@ -27,23 +28,60 @@ export class TooltipUI {
             `费用: ${tower.cost} 金币`,
             ``,
             tower.description || '无描述'
-        ].join('\n');
+        ];
 
-        // 计算tooltip尺寸
+        // 检查槽位是否被锁定（仅在商店中显示）
+        if (slotIndex !== null) {
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene && gameScene.towerShop) {
+                const isSlotLocked = gameScene.towerShop.isSlotLocked(slotIndex);
+                if (isSlotLocked) {
+                    contentLines.push('');
+                    contentLines.push('🔒 该防御塔已被锁定');
+                    contentLines.push('不会被自动刷新替换');
+                }
+            }
+        }
+
+        const content = contentLines.join('\n');
+
+        // 计算tooltip尺寸 - 优化中文字符宽度计算
         const lines = content.split('\n');
-        const maxLineLength = Math.max(...lines.map(line => line.length));
-        const tooltipWidth = Math.max(200, maxLineLength * 8 + 20);
-        const tooltipHeight = lines.length * 18 + 20;
+        const maxLineLength = Math.max(...lines.map(line => {
+            // 中文字符按1.5倍宽度计算，英文字符按1倍计算
+            let length = 0;
+            for (let char of line) {
+                if (char.charCodeAt(0) > 127) {
+                    length += 1.5; // 中文字符
+                } else {
+                    length += 1; // 英文字符
+                }
+            }
+            return length;
+        }));
+        const tooltipWidth = Math.max(250, maxLineLength * 8 + 30);
+        const tooltipHeight = lines.length * 18 + 30;
 
         // 调整位置确保不超出屏幕
         let tooltipX = x + 10;
         let tooltipY = y - tooltipHeight - 10;
 
+        // 检查右边界
         if (tooltipX + tooltipWidth > 1280) {
             tooltipX = x - tooltipWidth - 10;
         }
+        // 检查左边界
+        if (tooltipX < 0) {
+            tooltipX = 10;
+        }
+        
+        // 检查上边界
         if (tooltipY < 0) {
             tooltipY = y + 20;
+        }
+        // 检查下边界
+        if (tooltipY + tooltipHeight > 720) {
+            tooltipY = 720 - tooltipHeight - 10;
         }
 
         // 创建tooltip背景
@@ -91,21 +129,43 @@ export class TooltipUI {
         // 创建装备tooltip内容
         const content = this.createEquipmentTooltipContent(equipment);
 
-        // 计算tooltip尺寸
+        // 计算tooltip尺寸 - 优化中文字符宽度计算
         const lines = content.split('\n');
-        const maxLineLength = Math.max(...lines.map(line => line.length));
-        const tooltipWidth = Math.max(220, maxLineLength * 8 + 20);
-        const tooltipHeight = lines.length * 18 + 20;
+        const maxLineLength = Math.max(...lines.map(line => {
+            // 中文字符按1.5倍宽度计算，英文字符按1倍计算
+            let length = 0;
+            for (let char of line) {
+                if (char.charCodeAt(0) > 127) {
+                    length += 1.5; // 中文字符
+                } else {
+                    length += 1; // 英文字符
+                }
+            }
+            return length;
+        }));
+        const tooltipWidth = Math.max(250, maxLineLength * 8 + 30);
+        const tooltipHeight = lines.length * 18 + 30;
 
         // 调整位置确保不超出屏幕
         let tooltipX = x + 10;
         let tooltipY = y - tooltipHeight - 10;
 
+        // 检查右边界
         if (tooltipX + tooltipWidth > 1280) {
             tooltipX = x - tooltipWidth - 10;
         }
+        // 检查左边界
+        if (tooltipX < 0) {
+            tooltipX = 10;
+        }
+        
+        // 检查上边界
         if (tooltipY < 0) {
             tooltipY = y + 20;
+        }
+        // 检查下边界
+        if (tooltipY + tooltipHeight > 720) {
+            tooltipY = 720 - tooltipHeight - 10;
         }
 
         // 确定装备品质颜色
@@ -185,21 +245,43 @@ export class TooltipUI {
 
         const content = lines.join('\n');
 
-        // 计算tooltip尺寸
+        // 计算tooltip尺寸 - 优化中文字符宽度计算
         const contentLines = content.split('\n');
-        const maxLineLength = Math.max(...contentLines.map(line => line.length));
-        const tooltipWidth = Math.max(250, maxLineLength * 7 + 20);
-        const tooltipHeight = contentLines.length * 16 + 20;
+        const maxLineLength = Math.max(...contentLines.map(line => {
+            // 中文字符按1.5倍宽度计算，英文字符按1倍计算
+            let length = 0;
+            for (let char of line) {
+                if (char.charCodeAt(0) > 127) {
+                    length += 1.5; // 中文字符
+                } else {
+                    length += 1; // 英文字符
+                }
+            }
+            return length;
+        }));
+        const tooltipWidth = Math.max(250, maxLineLength * 8 + 30);
+        const tooltipHeight = contentLines.length * 18 + 30;
 
         // 调整位置确保不超出屏幕
         let tooltipX = x + 10;
         let tooltipY = y - tooltipHeight - 10;
 
+        // 检查右边界
         if (tooltipX + tooltipWidth > 1280) {
             tooltipX = x - tooltipWidth - 10;
         }
+        // 检查左边界
+        if (tooltipX < 0) {
+            tooltipX = 10;
+        }
+        
+        // 检查上边界
         if (tooltipY < 0) {
             tooltipY = y + 20;
+        }
+        // 检查下边界
+        if (tooltipY + tooltipHeight > 720) {
+            tooltipY = 720 - tooltipHeight - 10;
         }
 
         // 创建tooltip背景

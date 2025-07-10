@@ -4,14 +4,65 @@ export class StatusUI {
     constructor(scene) {
         this.scene = scene;
         this.elements = {};
+        
+        // 确保elements对象总是被正确初始化
+        this.resetElements();
+    }
+
+    resetElements() {
+        // 重置所有UI元素引用
+        this.elements = {
+            // 状态栏元素
+            goldText: null,
+            goldBackground: null,
+            goldBackgroundGlow: null,
+            goldIcon: null,
+            healthText: null,
+            healthBackground: null,
+            healthBackgroundGlow: null,
+            healthIcon: null,
+            towerLimitText: null,
+            towerLimitBackground: null,
+            towerLimitBackgroundGlow: null,
+            towerLimitIcon: null,
+            
+            // 波次显示元素
+            waveText: null,
+            mapNameText: null,
+            selectedTowerInfo: null,
+            
+            // 等级和经验元素
+            levelText: null,
+            experienceValueText: null,
+            expBarBackground: null,
+            expBarForeground: null,
+            upgradeButton: null,
+            upgradeText: null,
+            refreshButton: null,
+            refreshText: null,
+            
+            // 品质概率显示
+            probabilityTitle: null,
+            probabilityList: [],
+            
+            // 版本显示
+            versionText: null
+        };
     }
 
     create() {
+        // 重置elements对象，确保干净的状态
+        this.resetElements();
+        
+        console.log('StatusUI create 开始...');
+        
         this.createStatusBar();
         this.createWaveDisplay();
         this.createLevelAndExperience();
         this.createRarityProbabilityDisplay();
         this.createVersionDisplay();
+        
+        console.log('StatusUI create 完成');
     }
 
     createStatusBar() {
@@ -105,6 +156,17 @@ export class StatusUI {
     }
 
     createWaveDisplay() {
+        // 地图名称显示（上方左侧）
+        this.elements.mapNameText = this.scene.add.text(120, 30, '', {
+            fontSize: '18px',
+            fill: '#88dd88',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        });
+        this.elements.mapNameText.setOrigin(0.5, 0.5);
+
         // 波次显示（移至上方居中）
         this.elements.waveText = this.scene.add.text(640, 30, '波次: 1/20', {
             fontSize: '24px',
@@ -253,15 +315,47 @@ export class StatusUI {
         this.elements.versionText.setOrigin(0, 0);
     }
 
-    updateGold(amount) {
+    updateGold(amount, changeAmount = null) {
         if (this.elements.goldText) {
             this.elements.goldText.setText(amount.toString());
+            
+            // 添加跳动动画效果
+            this.scene.tweens.add({
+                targets: this.elements.goldText,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                duration: 150,
+                ease: 'Back.easeOut',
+                yoyo: true,
+                repeat: 0
+            });
+            
+            // 显示变化数值
+            if (changeAmount !== null && changeAmount !== 0) {
+                this.showChangeNumber(this.elements.goldText, changeAmount, changeAmount > 0 ? '#00ff00' : '#ff4444');
+            }
         }
     }
 
-    updateHealth(amount) {
+    updateHealth(amount, changeAmount = null) {
         if (this.elements.healthText) {
             this.elements.healthText.setText(amount.toString());
+            
+            // 添加跳动动画效果
+            this.scene.tweens.add({
+                targets: this.elements.healthText,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                duration: 150,
+                ease: 'Back.easeOut',
+                yoyo: true,
+                repeat: 0
+            });
+            
+            // 显示变化数值
+            if (changeAmount !== null && changeAmount !== 0) {
+                this.showChangeNumber(this.elements.healthText, changeAmount, changeAmount > 0 ? '#00ff00' : '#ff4444');
+            }
             
             // 根据生命值改变边框和图标颜色
             if (amount > 70) {
@@ -286,6 +380,16 @@ export class StatusUI {
         }
     }
 
+    updateMapName(mapName) {
+        if (this.elements.mapNameText && this.elements.mapNameText.setText) {
+            try {
+                this.elements.mapNameText.setText(mapName);
+            } catch (error) {
+                console.warn('updateMapName失败:', error);
+            }
+        }
+    }
+
     updateLevel(level, maxTowers) {
         if (this.elements.levelText) {
             this.elements.levelText.setText(`${level}级`);
@@ -293,7 +397,9 @@ export class StatusUI {
         
         // 更新塔位显示
         const gameScene = this.scene.scene.get('GameScene');
-        const currentTowers = gameScene.towers ? gameScene.towers.children.entries.length : 0;
+        const currentTowers = gameScene && gameScene.towers && gameScene.towers.children && gameScene.towers.children.entries 
+            ? gameScene.towers.children.entries.length 
+            : 0;
         if (this.elements.towerLimitText) {
             this.elements.towerLimitText.setText(`${currentTowers}/${maxTowers}`);
         }
@@ -327,6 +433,12 @@ export class StatusUI {
         const gameScene = this.scene.scene.get('GameScene');
         if (!gameScene || !gameScene.gameState) return;
         
+        // 检查probabilityList是否存在
+        if (!this.elements.probabilityList || !Array.isArray(this.elements.probabilityList)) {
+            console.warn('probabilityList未初始化，跳过更新');
+            return;
+        }
+        
         const playerLevel = gameScene.gameState.level;
         
         // 获取当前等级的概率配置
@@ -339,6 +451,8 @@ export class StatusUI {
         
         // 更新每个概率文本
         this.elements.probabilityList.forEach(probabilityText => {
+            if (!probabilityText || !probabilityText.rarityKey) return;
+            
             const rarityKey = probabilityText.rarityKey;
             const rarityData = TOWER_RARITY[rarityKey];
             const probability = levelModifiers[rarityKey];
@@ -377,25 +491,33 @@ export class StatusUI {
 
     updateExperience(currentExp, expRequiredForNext) {
         // 更新经验数值显示
-        if (this.elements.experienceValueText) {
-            this.elements.experienceValueText.setText(`${currentExp}/${expRequiredForNext}`);
+        if (this.elements.experienceValueText && this.elements.experienceValueText.setText) {
+            try {
+                this.elements.experienceValueText.setText(`${currentExp}/${expRequiredForNext}`);
+            } catch (error) {
+                console.warn('updateExperience文本更新失败:', error);
+            }
         }
         
         // 更新经验进度条
-        if (this.elements.expBarForeground && expRequiredForNext > 0) {
-            const progress = currentExp / expRequiredForNext;
-            const maxWidth = 120;
-            const currentWidth = maxWidth * progress;
-            
-            this.elements.expBarForeground.setSize(currentWidth, 8);
-            
-            // 根据进度改变颜色
-            if (progress >= 0.8) {
-                this.elements.expBarForeground.setFillStyle(0xffd700);
-            } else if (progress >= 0.5) {
-                this.elements.expBarForeground.setFillStyle(0x44ff44);
-            } else {
-                this.elements.expBarForeground.setFillStyle(0x00ff88);
+        if (this.elements.expBarForeground && this.elements.expBarForeground.setSize && expRequiredForNext > 0) {
+            try {
+                const progress = currentExp / expRequiredForNext;
+                const maxWidth = 120;
+                const currentWidth = maxWidth * progress;
+                
+                this.elements.expBarForeground.setSize(currentWidth, 8);
+                
+                // 根据进度改变颜色
+                if (progress >= 0.8) {
+                    this.elements.expBarForeground.setFillStyle(0xffd700);
+                } else if (progress >= 0.5) {
+                    this.elements.expBarForeground.setFillStyle(0x44ff44);
+                } else {
+                    this.elements.expBarForeground.setFillStyle(0x00ff88);
+                }
+            } catch (error) {
+                console.warn('updateExperience进度条更新失败:', error);
             }
         }
     }
@@ -428,6 +550,52 @@ export class StatusUI {
 
     clearSelectedTowerInfo() {
         this.elements.selectedTowerInfo.setText('');
+    }
+
+    // 显示变化数值
+    showChangeNumber(targetElement, changeAmount, color) {
+        if (!targetElement) return;
+        
+        // 计算显示位置：右上偏左一点
+        const offsetX = 25;
+        const offsetY = -15;
+        const displayX = targetElement.x + offsetX;
+        const displayY = targetElement.y + offsetY;
+        
+        // 创建变化数值文本
+        const changeText = this.scene.add.text(displayX, displayY, 
+            (changeAmount > 0 ? '+' : '') + changeAmount.toString(), {
+            fontSize: '16px',
+            fill: color,
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        });
+        changeText.setOrigin(0.5);
+        
+        // 添加上浮和渐隐动画
+        this.scene.tweens.add({
+            targets: changeText,
+            y: displayY - 30,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Power2',
+            onComplete: () => {
+                changeText.destroy();
+            }
+        });
+        
+        // 添加轻微的缩放效果
+        this.scene.tweens.add({
+            targets: changeText,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 200,
+            ease: 'Back.easeOut',
+            yoyo: true,
+            repeat: 0
+        });
     }
 
     setInteractive(interactive) {

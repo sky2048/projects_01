@@ -11,8 +11,11 @@ export class GameScene extends Phaser.Scene {
         super('GameScene');
     }
 
-    create() {
+    create(data) {
         this.cameras.main.setBackgroundColor('#2d4a3e');
+        
+        // 接收来自菜单场景的地图选择数据
+        this.selectedMapData = data ? data.selectedMap : null;
         
         // 按顺序初始化各个组件
         this.initializeGame();
@@ -37,17 +40,39 @@ export class GameScene extends Phaser.Scene {
         } catch (error) {
             console.error('游戏初始化失败:', error);
             // 降级处理 - 强制初始化
-            this.initManagers();
+            try {
+                this.initManagers();
+            } catch (managerError) {
+                console.error('管理器初始化也失败:', managerError);
+                // 最后的降级处理 - 基本初始化
+                this.waveManager = null;
+                this.towerShop = null;
+                this.equipmentManager = null;
+            }
         }
     }
 
     initializeUIScene() {
         return new Promise((resolve, reject) => {
+            // 检查UI场景是否已经存在
+            const existingUIScene = this.scene.get('UIScene');
+            if (existingUIScene && existingUIScene.scene.isActive()) {
+                console.log('UI场景已存在，直接使用');
+                resolve();
+                return;
+            }
+            
             // 启动UI场景
             this.scene.launch('UIScene');
             
             // 等待UI场景的ready事件
             const uiScene = this.scene.get('UIScene');
+            if (!uiScene) {
+                console.error('无法获取UI场景');
+                reject(new Error('无法获取UI场景'));
+                return;
+            }
+            
             uiScene.events.once('ready', () => {
                 console.log('UI场景初始化完成');
                 resolve();
@@ -127,25 +152,60 @@ export class GameScene extends Phaser.Scene {
     }
 
     createPath() {
-        // 创建一条从左到右的路径
-        this.pathStart = { x: 0, y: Math.floor(this.boardHeight / 2) };
-        this.pathEnd = { x: this.boardWidth - 1, y: Math.floor(this.boardHeight / 2) };
+        // 使用选定的地图或随机选择
+        if (this.selectedMapData) {
+            this.currentMap = this.selectedMapData;
+            console.log(`使用选定地图: ${this.currentMap.name} - ${this.currentMap.description}`);
+        } else {
+            this.currentMap = MAP_CONFIG.getRandomMap();
+            console.log(`随机选择地图: ${this.currentMap.name} - ${this.currentMap.description}`);
+        }
+        
+        // 从地图配置中获取路径点
+        const mapPathPoints = this.currentMap.pathPoints;
+        
+        // 设置起点和终点
+        this.pathStart = mapPathPoints[0];
+        this.pathEnd = mapPathPoints[mapPathPoints.length - 1];
         
         // 创建路径点
         this.pathPoints = [];
-        for (let x = 0; x < this.boardWidth; x++) {
-            const pathTile = this.board[this.pathStart.y][x];
+        mapPathPoints.forEach((point, index) => {
+            const pathTile = this.board[point.y][point.x];
             pathTile.isPath = true;
-            pathTile.tile.setFillStyle(0x8b7355);
+            
+            // 为起始点和终点设置不同颜色
+            if (index === 0) {
+                // 起始点 - 绿色
+                pathTile.tile.setFillStyle(0x00ff00);
+            } else if (index === mapPathPoints.length - 1) {
+                // 终点 - 红色
+                pathTile.tile.setFillStyle(0xff0000);
+            } else {
+                // 普通路径 - 原来的颜色
+                pathTile.tile.setFillStyle(0x8b7355);
+            }
             
             this.pathPoints.push({
                 x: pathTile.worldX,
                 y: pathTile.worldY
             });
-        }
+        });
         
         // 初始化路径查找器
         this.pathFinder = new PathFinder(this.board, this.pathStart, this.pathEnd);
+        
+        // 延迟更新UI显示地图名称，避免渲染问题
+        this.time.delayedCall(100, () => {
+            const uiScene = this.scene.get('UIScene');
+            if (uiScene && uiScene.updateMapName) {
+                try {
+                    uiScene.updateMapName(this.currentMap.name);
+                } catch (error) {
+                    console.warn('更新地图名称失败:', error);
+                }
+            }
+        });
     }
 
     initManagers() {
@@ -164,7 +224,12 @@ export class GameScene extends Phaser.Scene {
             uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
         }
         if (uiScene && uiScene.updateExperience) {
-            uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+            // 延迟更新经验显示，避免渲染问题
+            this.time.delayedCall(100, () => {
+                if (uiScene && uiScene.updateExperience) {
+                    uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+                }
+            });
         }
         if (uiScene && uiScene.updateGold) {
             console.log('初始化UI金币显示:', this.gameState.gold);
@@ -176,6 +241,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     createGroups() {
+        // 简单地重置组引用，避免clear方法的问题
+        this.monsters = null;
+        this.towers = null;
+        this.projectiles = null;
+        
         // 创建游戏对象组
         this.monsters = this.add.group();
         this.towers = this.add.group();
@@ -183,6 +253,8 @@ export class GameScene extends Phaser.Scene {
         
         // 设置碰撞检测（支持穿透投射物多次碰撞）
         this.physics.add.overlap(this.projectiles, this.monsters, this.onProjectileHitMonster, this.shouldProcessCollision, this);
+        
+        console.log('游戏对象组创建完成');
     }
 
     setupInput() {
@@ -354,7 +426,7 @@ export class GameScene extends Phaser.Scene {
             
             // 通知UI更新
             if (uiScene && uiScene.updateGold) {
-                uiScene.updateGold(this.gameState.gold);
+                uiScene.updateGold(this.gameState.gold, -ECONOMY_CONFIG.TOWER_SHOP_COST);
             }
             
             // 更新塔位显示
@@ -376,7 +448,7 @@ export class GameScene extends Phaser.Scene {
         if (this.monsters) {
             this.monsters.children.entries.forEach(monster => {
                 if (monster && monster.updatePath) {
-                    monster.updatePath(this.pathFinder.getWorldPath());
+                    monster.updatePath(this.pathPoints);
                 }
             });
         }
@@ -397,7 +469,12 @@ export class GameScene extends Phaser.Scene {
         // 通知UI更新
         const uiScene = this.scene.get('UIScene');
         if (uiScene && uiScene.updateExperience) {
-            uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+            // 延迟更新经验显示，避免渲染问题
+            this.time.delayedCall(100, () => {
+                if (uiScene && uiScene.updateExperience) {
+                    uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
+                }
+            });
         }
         if (leveledUp && uiScene && uiScene.updateLevel) {
             uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
@@ -414,7 +491,7 @@ export class GameScene extends Phaser.Scene {
             // 更新金币显示
             const uiScene = this.scene.get('UIScene');
             if (uiScene && uiScene.updateGold) {
-                uiScene.updateGold(this.gameState.gold);
+                uiScene.updateGold(this.gameState.gold, -ECONOMY_CONFIG.EXP_BUTTON_COST);
             }
             
             return { success: true, leveledUp };
@@ -433,14 +510,14 @@ export class GameScene extends Phaser.Scene {
         const expRequiredForNext = this.getExpRequiredForNextLevel();
         this.gameState.experience -= expRequiredForNext;
         this.gameState.level += 1;
-        this.gameState.maxTowers += 2; // 每级增加2个塔位
+        this.gameState.maxTowers += 1; // 每级增加1个塔位 (原来是2个)
         
         console.log(`升级到等级 ${this.gameState.level}！可放置 ${this.gameState.maxTowers} 个塔`);
         
         // 显示升级提示
         const uiScene = this.scene.get('UIScene');
         if (uiScene && uiScene.showNotification) {
-            uiScene.showNotification(`升级成功！等级 ${this.gameState.level}，塔位 +2`, 'success', 2500);
+            uiScene.showNotification(`升级成功！等级 ${this.gameState.level}，塔位 +1`, 'success', 2500);
         }
     }
 
@@ -508,7 +585,7 @@ export class GameScene extends Phaser.Scene {
         // 获取UI场景并更新显示
         const uiScene = this.scene.get('UIScene');
         if (uiScene && uiScene.updateGold) {
-            uiScene.updateGold(this.gameState.gold);
+            uiScene.updateGold(this.gameState.gold, refund);
         }
         
         // 更新塔位显示
@@ -693,15 +770,31 @@ export class GameScene extends Phaser.Scene {
     }
 
     spawnMonster(monsterData, x = null, y = null, isElite = false, modifiers = []) {
-        // 获取当前的动态路径，而不是固定的直线路径
-        const currentPath = this.pathFinder.getWorldPath();
+        // 检查必要的组件是否存在
+        if (!this.monsters || !this.pathPoints) {
+            console.error('spawnMonster: 缺少必要的组件');
+            return null;
+        }
+        
+        // 直接使用预定义的路径点，不使用路径查找器
+        const currentPath = this.pathPoints;
+        if (!currentPath || currentPath.length === 0) {
+            console.error('spawnMonster: 路径点为空');
+            return null;
+        }
+        
         const startPoint = currentPath[0];
         const spawnX = x !== null ? x : startPoint.x;
         const spawnY = y !== null ? y : startPoint.y;
         
-        const monster = new Monster(this, spawnX, spawnY, monsterData, currentPath, isElite, modifiers);
-        this.monsters.add(monster);
-        return monster;
+        try {
+            const monster = new Monster(this, spawnX, spawnY, monsterData, currentPath, isElite, modifiers);
+            this.monsters.add(monster);
+            return monster;
+        } catch (error) {
+            console.error('spawnMonster失败:', error);
+            return null;
+        }
     }
 
     shouldProcessCollision(projectile, monster) {
@@ -755,10 +848,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     onMonsterReachedEnd() {
-        this.gameState.health -= 10;
+        this.gameState.health -= 15;  // 生命值损失 10→15
         const uiScene = this.scene.get('UIScene');
         if (uiScene && uiScene.updateHealth) {
-            uiScene.updateHealth(this.gameState.health);
+            uiScene.updateHealth(this.gameState.health, -15);
         }
         
         // 显示生命值损失提示
@@ -766,7 +859,7 @@ export class GameScene extends Phaser.Scene {
             if (this.gameState.health <= 0) {
                 uiScene.showNotification('生命值归零！游戏结束！', 'error', 3000, 'center');
             } else {
-                uiScene.showNotification(`生命值 -10！剩余 ${this.gameState.health}`, 'error', 2000, 'center');
+                uiScene.showNotification(`生命值 -15！剩余 ${this.gameState.health}`, 'error', 2000, 'center');
             }
         }
         
@@ -818,7 +911,7 @@ export class GameScene extends Phaser.Scene {
         this.tweens.killAll();
         
         // 1. 清理并销毁所有塔
-        if (this.towers && this.towers.children) {
+        if (this.towers && this.towers.children && this.towers.children.entries) {
             this.towers.children.entries.forEach(tower => {
                 // 停止塔的所有buff计时器
                 if (tower.activeBuffs) {
@@ -849,7 +942,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         // 2. 清理并销毁所有怪物
-        if (this.monsters && this.monsters.children) {
+        if (this.monsters && this.monsters.children && this.monsters.children.entries) {
             this.monsters.children.entries.forEach(monster => {
                 // 停止怪物的移动动画
                 if (monster.moveTween) {
@@ -871,7 +964,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         // 3. 清理并销毁所有投射物
-        if (this.projectiles && this.projectiles.children) {
+        if (this.projectiles && this.projectiles.children && this.projectiles.children.entries) {
             this.projectiles.children.entries.forEach(projectile => {
                 projectile.useTrackingMovement = false;
                 
@@ -940,7 +1033,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         // 塔攻击逻辑
-        if (this.towers) {
+        if (this.towers && this.towers.children && this.towers.children.entries) {
             this.towers.children.entries.forEach(tower => {
                 if (tower.update) {
                     tower.update();
@@ -949,7 +1042,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         // 更新怪物
-        if (this.monsters) {
+        if (this.monsters && this.monsters.children && this.monsters.children.entries) {
             this.monsters.children.entries.forEach(monster => {
                 if (monster.update) {
                     monster.update();
@@ -958,7 +1051,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         // 更新投射物
-        if (this.projectiles) {
+        if (this.projectiles && this.projectiles.children && this.projectiles.children.entries) {
             this.projectiles.children.entries.forEach(projectile => {
                 if (projectile.update) {
                     projectile.update();
@@ -971,7 +1064,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     updateSynergies() {
-        if (this.towers && this.towers.children.entries.length > 0) {
+        if (this.towers && this.towers.children && this.towers.children.entries && this.towers.children.entries.length > 0) {
             const towers = this.towers.children.entries.map(tower => tower.towerData);
             const uiScene = this.scene.get('UIScene');
             if (uiScene && uiScene.updateSynergies) {
@@ -981,6 +1074,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     checkForCombinations() {
+        if (!this.towers || !this.towers.children || !this.towers.children.entries) {
+            return;
+        }
+        
         const towers = this.towers.children.entries;
         
         // 按类型和品质分组塔
@@ -1154,5 +1251,38 @@ export class GameScene extends Phaser.Scene {
                 text.destroy();
             }
         });
+    }
+
+    // 场景关闭时的清理方法
+    shutdown() {
+        console.log('GameScene shutdown 开始清理资源...');
+        
+        // 停止所有管理器
+        if (this.waveManager) {
+            this.waveManager.stopWave();
+        }
+        
+        // 清理游戏资源
+        this.cleanupGameResources();
+        
+        // 清理场景状态
+        this.selectedTower = null;
+        this.isMovingTower = false;
+        this.towerToMove = null;
+        this.gameState = null;
+        
+        // 清理管理器
+        this.waveManager = null;
+        this.towerShop = null;
+        this.equipmentManager = null;
+        this.pathFinder = null;
+        
+        // 清理数据
+        this.board = null;
+        this.pathPoints = null;
+        this.currentMap = null;
+        this.selectedMapData = null;
+        
+        console.log('GameScene shutdown 清理完成');
     }
 } 

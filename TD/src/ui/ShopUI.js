@@ -54,7 +54,8 @@ export class ShopUI {
             costText: null,
             rarityBorder: null,
             index: index,
-            tower: null
+            tower: null,
+            originalY: y
         };
 
         slot.background.setStrokeStyle(2, 0x4a4a6a);
@@ -71,7 +72,7 @@ export class ShopUI {
         slot.background.on('pointerover', (pointer) => {
             slot.background.setFillStyle(0x4a4a7a);
             if (slot.tower) {
-                this.scene.showTowerTooltip(pointer.worldX, pointer.worldY, slot.tower);
+                this.scene.showTowerTooltip(pointer.worldX, pointer.worldY, slot.tower, index);
             }
         });
 
@@ -82,7 +83,7 @@ export class ShopUI {
 
         slot.background.on('pointermove', (pointer) => {
             if (slot.tower && this.scene.tooltip && this.scene.tooltip.visible) {
-                this.scene.showTowerTooltip(pointer.worldX, pointer.worldY, slot.tower);
+                this.scene.showTowerTooltip(pointer.worldX, pointer.worldY, slot.tower, index);
             }
         });
 
@@ -96,16 +97,21 @@ export class ShopUI {
         const startX = (1280 - totalSlotsWidth) / 2 + slotWidth / 2;
         const slotY = 650;
         
-        const buttonWidth = 80;
-        const buttonHeight = 30;
-        const buttonX = startX + totalSlotsWidth - slotWidth/2 - 30;
-        const buttonY = slotY - 60;
+        // 改为竖长形按钮
+        const buttonWidth = 25;
+        const buttonHeight = 60;
+        // 将按钮向左移动更多
+        const lastSlotX = startX + (4 * slotSpacing);
+        const buttonX = lastSlotX + slotWidth/2 + 20;
+        const buttonY = slotY;
         
         this.elements.lockButton = this.scene.add.rectangle(buttonX, buttonY, buttonWidth, buttonHeight, 0x6c757d);
-        this.elements.lockText = this.scene.add.text(buttonX, buttonY, '锁定', {
-            fontSize: '12px',
+        this.elements.lockText = this.scene.add.text(buttonX, buttonY, '锁\n定', {
+            fontSize: '10px',
             fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
+            fontFamily: 'Arial, sans-serif',
+            align: 'center',
+            lineSpacing: 2
         });
         this.elements.lockText.setOrigin(0.5);
 
@@ -113,6 +119,25 @@ export class ShopUI {
         this.elements.lockButton.on('pointerdown', () => {
             this.scene.handleShopLock();
         });
+        
+        // 添加悬停效果
+        this.elements.lockButton.on('pointerover', () => {
+            this.elements.lockButton.setFillStyle(0x7d868f);
+        });
+        
+        this.elements.lockButton.on('pointerout', () => {
+            // 根据当前锁定状态恢复颜色
+            const gameScene = this.scene.scene.get('GameScene');
+            const isLocked = gameScene && gameScene.towerShop && gameScene.towerShop.getIsLocked();
+            if (isLocked) {
+                this.elements.lockButton.setFillStyle(0xffc107);
+            } else {
+                this.elements.lockButton.setFillStyle(0x6c757d);
+            }
+        });
+        
+        // 添加调试信息，确认按钮位置
+        console.log(`锁定按钮位置: x=${buttonX}, y=${buttonY}`);
     }
 
     updateShop(offers) {
@@ -219,7 +244,35 @@ export class ShopUI {
                 slot.selectedIndicator = null;
             }
             
-            // 重置缩放
+            // 重置位置和缩放（使用动画过渡）
+            if (slot.originalY !== undefined) {
+                const targets = [slot.background];
+                if (slot.icon) targets.push(slot.icon);
+                if (slot.nameText) targets.push(slot.nameText);
+                if (slot.costText) targets.push(slot.costText);
+                if (slot.rarityBorder) targets.push(slot.rarityBorder);
+                
+                // 计算每个元素的目标Y坐标
+                const targetPositions = {
+                    [slot.background.id]: slot.originalY,
+                    [slot.icon?.id]: slot.originalY - 5,
+                    [slot.nameText?.id]: slot.originalY + 18,
+                    [slot.costText?.id]: slot.originalY + 32,
+                    [slot.rarityBorder?.id]: slot.originalY
+                };
+                
+                targets.forEach(target => {
+                    if (target && targetPositions[target.id] !== undefined) {
+                        this.scene.tweens.add({
+                            targets: target,
+                            y: targetPositions[target.id],
+                            duration: 200,
+                            ease: 'Back.easeOut'
+                        });
+                    }
+                });
+            }
+            
             slot.background.setScale(1);
             if (slot.icon) slot.icon.setScale(1);
             if (slot.nameText) slot.nameText.setScale(1);
@@ -235,6 +288,38 @@ export class ShopUI {
             // 更亮的背景色和金色边框
             slot.background.setFillStyle(0x7a7a9a);
             slot.background.setStrokeStyle(4, 0xffd700);
+            
+            // 上浮效果 - 向上移动10像素（使用动画过渡）
+            const floatOffset = -10;
+            if (slot.originalY === undefined) {
+                slot.originalY = slot.background.y;
+            }
+            
+            const targets = [slot.background];
+            if (slot.icon) targets.push(slot.icon);
+            if (slot.nameText) targets.push(slot.nameText);
+            if (slot.costText) targets.push(slot.costText);
+            if (slot.rarityBorder) targets.push(slot.rarityBorder);
+            
+            // 计算每个元素的目标Y坐标
+            const targetPositions = {
+                [slot.background.id]: slot.originalY + floatOffset,
+                [slot.icon?.id]: slot.originalY - 5 + floatOffset,
+                [slot.nameText?.id]: slot.originalY + 18 + floatOffset,
+                [slot.costText?.id]: slot.originalY + 32 + floatOffset,
+                [slot.rarityBorder?.id]: slot.originalY + floatOffset
+            };
+            
+            targets.forEach(target => {
+                if (target && targetPositions[target.id] !== undefined) {
+                    this.scene.tweens.add({
+                        targets: target,
+                        y: targetPositions[target.id],
+                        duration: 200,
+                        ease: 'Back.easeOut'
+                    });
+                }
+            });
             
             // 轻微放大效果
             slot.background.setScale(1.05);
@@ -272,10 +357,10 @@ export class ShopUI {
         if (this.elements.lockButton && this.elements.lockText) {
             if (isLocked) {
                 this.elements.lockButton.setFillStyle(0xffc107);
-                this.elements.lockText.setText('🔒解锁');
+                this.elements.lockText.setText('🔒\n解\n锁');
             } else {
                 this.elements.lockButton.setFillStyle(0x6c757d);
-                this.elements.lockText.setText('锁定');
+                this.elements.lockText.setText('锁\n定');
             }
         }
     }

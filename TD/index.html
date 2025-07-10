@@ -39,6 +39,28 @@
                 text-decoration: none;
                 color: inherit;
             }
+
+            /* 游戏画布优化 */
+            canvas {
+                image-rendering: auto;                        /* 自动选择最佳渲染方式 */
+                image-rendering: high-quality;               /* 高质量渲染 */
+                background: #1a1a2e;
+                display: block;
+                margin: 0 auto;
+                /* 文字渲染优化 */
+                text-rendering: optimizeLegibility;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+
+            #game-container {
+                width: 100vw;
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                background: #040218;
+            }
         </style>
     </head>
     <body>

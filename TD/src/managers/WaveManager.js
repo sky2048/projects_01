@@ -48,7 +48,7 @@ export class WaveManager {
         // 给予波次奖励
         this.scene.gameState.gold += ECONOMY_CONFIG.GOLD_PER_WAVE;
         if (uiScene && uiScene.updateGold) {
-            uiScene.updateGold(this.scene.gameState.gold);
+            uiScene.updateGold(this.scene.gameState.gold, ECONOMY_CONFIG.GOLD_PER_WAVE);
         }
         
         // 显示金币奖励提示
@@ -76,14 +76,14 @@ export class WaveManager {
 
     setupNormalWave() {
         // 普通波次
-        this.monstersInWave = Math.min(5 + Math.floor(this.currentWave / 2), 15);
+        this.monstersInWave = Math.min(6 + Math.floor(this.currentWave / 2), 18);  // 怪物数量 5→6，上限 15→18
         
-        const baseHealth = 50 * Math.pow(WAVE_CONFIG.MONSTER_HEALTH_SCALE, this.currentWave - 1);
-        const baseSpeed = 30 * Math.pow(WAVE_CONFIG.MONSTER_SPEED_SCALE, this.currentWave - 1);
+        const baseHealth = 65 * Math.pow(WAVE_CONFIG.MONSTER_HEALTH_SCALE, this.currentWave - 1);  // 基础血量 50→65
+        const baseSpeed = 35 * Math.pow(WAVE_CONFIG.MONSTER_SPEED_SCALE, this.currentWave - 1);    // 基础速度 30→35
         
         this.monsterData = {
             health: Math.floor(baseHealth),
-            speed: Math.min(baseSpeed, 100),
+            speed: Math.min(baseSpeed, 110),  // 速度上限 100→110
             reward: 2 + Math.floor(this.currentWave / 5),
             isBoss: false
         };
@@ -245,5 +245,16 @@ export class WaveManager {
 
     getRemainingMonsters() {
         return this.monstersInWave - this.monstersSpawned;
+    }
+
+    // 停止波次管理器
+    stopWave() {
+        this.waveInProgress = false;
+        this.currentWave = 0;
+        this.monstersInWave = 0;
+        this.monstersSpawned = 0;
+        this.lastSpawnTime = 0;
+        this.waveStartTime = 0;
+        console.log('WaveManager 已停止');
     }
 } 

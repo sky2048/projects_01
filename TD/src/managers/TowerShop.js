@@ -131,7 +131,7 @@ export class TowerShop {
             this.scene.gameState.gold -= ECONOMY_CONFIG.REFRESH_COST;
             const uiScene = this.scene.scene.get('UIScene');
             if (uiScene && uiScene.updateGold) {
-                uiScene.updateGold(this.scene.gameState.gold);
+                uiScene.updateGold(this.scene.gameState.gold, -ECONOMY_CONFIG.REFRESH_COST);
             }
             
             // 手动刷新时自动解除锁定
