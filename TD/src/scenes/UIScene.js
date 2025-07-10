@@ -88,7 +88,7 @@ export class UIScene extends Phaser.Scene {
 
     createUIBackground() {
         // 底部UI背景
-        this.shopBackground = this.add.rectangle(640, 650, 1280, 140, 0x2c2c54);
+        this.shopBackground = this.add.rectangle(640, 660, 1280, 140, 0x2c2c54);
         this.shopBackground.setAlpha(0.9);
     }
 

@@ -13,7 +13,7 @@ export class EquipmentUI {
     createEquipmentInventory() {
         // 装备背包右侧显示，移除标题，格子完美镶嵌
         const equipmentX = 1100;
-        const equipmentY = 650;
+        const equipmentY = 660;
         
         // 装备背包背景 - 调整尺寸以完美容纳8个槽位
         const slotSize = 30;

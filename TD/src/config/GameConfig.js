@@ -125,13 +125,13 @@ export const ECONOMY_CONFIG = {
     INTEREST_RATE: 0.1,
     MAX_INTEREST: 5,
     TOWER_SHOP_COST: 18,        // 提高塔的价格 15→18
-    REFRESH_COST: 3,            // 提高刷新费用 2→3
+    REFRESH_COST: 2,            // 刷新费用
     STARTING_LEVEL: 1,
     UPGRADE_COST_BASE: 50,
     // 经验系统配置
     EXP_PER_BUTTON_CLICK: 4,
     EXP_PER_WAVE_END: 2,
-    EXP_BUTTON_COST: 5          // 提高经验按钮费用 4→5
+    EXP_BUTTON_COST: 4          // 经验按钮费用
 };
 
 // 经验等级系统

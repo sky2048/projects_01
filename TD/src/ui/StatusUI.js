@@ -192,7 +192,7 @@ export class StatusUI {
     createLevelAndExperience() {
         // 左侧信息显示区域 - 按要求重新设计布局
         const leftDisplayX = 180;
-        const leftInfoY = 600;
+        const leftInfoY = 610;
         
         // 等级和经验文本显示 - 在同一行
         this.elements.levelText = this.scene.add.text(leftDisplayX - 30, leftInfoY, '1级', {
@@ -217,7 +217,7 @@ export class StatusUI {
         this.elements.experienceValueText.setOrigin(0.5, 0.5);
 
         // 经验进度条 - 位于等级文本下方
-        const expBarY = leftInfoY + 25;
+        const expBarY = leftInfoY + 16;
         const expBarWidth = 120;
         const expBarHeight = 8;
         
@@ -233,10 +233,10 @@ export class StatusUI {
         const expButtonWidth = 120;
         const expButtonHeight = 25;
         const expButtonX = leftDisplayX;
-        const expButtonY = expBarY + 25;
+        const expButtonY = expBarY + 26;
         
         this.elements.upgradeButton = this.scene.add.rectangle(expButtonX, expButtonY, expButtonWidth, expButtonHeight, 0x28a745);
-        this.elements.upgradeText = this.scene.add.text(expButtonX, expButtonY, `购买经验(${ECONOMY_CONFIG.EXP_BUTTON_COST})`, {
+        this.elements.upgradeText = this.scene.add.text(expButtonX, expButtonY, `购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`, {
             fontSize: '10px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
@@ -250,10 +250,10 @@ export class StatusUI {
 
         // 刷新按钮 - 放在购买经验按钮下方
         const refreshButtonX = leftDisplayX;
-        const refreshButtonY = expButtonY + 30;
+        const refreshButtonY = expButtonY + 35;
         
         this.elements.refreshButton = this.scene.add.rectangle(refreshButtonX, refreshButtonY, expButtonWidth, expButtonHeight, 0x4a90e2);
-        this.elements.refreshText = this.scene.add.text(refreshButtonX, refreshButtonY, `刷新(${ECONOMY_CONFIG.REFRESH_COST})`, {
+        this.elements.refreshText = this.scene.add.text(refreshButtonX, refreshButtonY, `刷新商店(-${ECONOMY_CONFIG.REFRESH_COST})`, {
             fontSize: '10px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
@@ -421,7 +421,7 @@ export class StatusUI {
         
         // 更新经验按钮显示
         if (this.elements.upgradeText) {
-            this.elements.upgradeText.setText(`购买经验(${ECONOMY_CONFIG.EXP_BUTTON_COST})`);
+            this.elements.upgradeText.setText(`购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`);
         }
         
         // 更新品质概率显示

@@ -18,7 +18,7 @@ export class ShopUI {
         const slotWidth = 120;
         const slotSpacing = 130;
         const totalSlotsWidth = (5 - 1) * slotSpacing + slotWidth;
-        const slotY = 650;
+        const slotY = 660;
         
         // 创建商店槽位整体衬底
         const shopPadding = 20;
@@ -34,7 +34,7 @@ export class ShopUI {
         const slotSpacing = 130;
         const totalSlotsWidth = (5 - 1) * slotSpacing + slotWidth;
         const startX = (1280 - totalSlotsWidth) / 2 + slotWidth / 2;
-        const slotY = 650;
+        const slotY = 660;
         
         // 商店槽位 - 水平居中显示
         this.shopSlots = [];
@@ -95,7 +95,7 @@ export class ShopUI {
         const slotSpacing = 130;
         const totalSlotsWidth = (5 - 1) * slotSpacing + slotWidth;
         const startX = (1280 - totalSlotsWidth) / 2 + slotWidth / 2;
-        const slotY = 650;
+        const slotY = 660;
         
         // 改为竖长形按钮
         const buttonWidth = 25;
