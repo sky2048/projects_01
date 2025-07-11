@@ -1,5 +1,5 @@
 import { TOWER_RARITY } from '../config/GameConfig.js';
-import { Projectile } from './Projectile.js';
+import { AttackStrategyFactory } from './AttackStrategies.js';
 
 export class Tower extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, towerData) {
@@ -35,6 +35,9 @@ export class Tower extends Phaser.Physics.Arcade.Sprite {
         
         // 特殊效果
         this.specialEffects = this.initializeSpecialEffects();
+        
+        // 攻击策略 - 使用策略模式
+        this.attackStrategy = AttackStrategyFactory.createStrategy(this);
         
         // 添加到场景
         scene.add.existing(this);
@@ -197,144 +200,14 @@ export class Tower extends Phaser.Physics.Arcade.Sprite {
             }
         }
         
-        // 根据塔的类型创建不同的攻击效果
-        switch (this.type) {
-            case 'ARCHER':
-                this.archerAttack(finalDamage);
-                break;
-            case 'MAGE':
-                this.mageAttack(finalDamage);
-                break;
-            case 'ASSASSIN':
-                this.assassinAttack(finalDamage);
-                break;
-            case 'TANK':
-                this.tankAttack(finalDamage);
-                break;
-            case 'SUPPORT':
-                this.supportAttack(finalDamage);
-                break;
-        }
+        // 使用策略模式执行攻击
+        this.attackStrategy.execute(finalDamage, this.target);
         
         // 攻击动画
         this.playAttackAnimation();
     }
 
-    archerAttack(damage) {
-        // 创建箭矢
-        const projectile = new Projectile(this.scene, this.x, this.y, this.target, {
-            damage: damage,
-            speed: 300,
-            sprite: 'arrow',
-            color: 0xffffff,
-            piercing: this.specialEffects.piercing || false
-        });
-        
-        if (this.scene.projectiles) {
-            this.scene.projectiles.add(projectile);
-        }
-        
-        // 多重射击效果
-        if (this.specialEffects.multiShot) {
-            const nearbyTargets = this.findNearbyTargets(2);
-            for (const target of nearbyTargets) {
-                const extraProjectile = new Projectile(this.scene, this.x, this.y, target, {
-                    damage: damage * 0.7,
-                    speed: 300,
-                    sprite: 'arrow',
-                    color: 0xffff00,
-                    piercing: this.specialEffects.piercing || false
-                });
-                if (this.scene.projectiles) {
-                    this.scene.projectiles.add(extraProjectile);
-                }
-            }
-        }
-    }
 
-    mageAttack(damage) {
-        // 魔法球
-        const projectile = new Projectile(this.scene, this.x, this.y, this.target, {
-            damage: damage,
-            speed: 200,
-            sprite: 'magic',
-            color: 0x8000ff
-        });
-        
-        if (this.scene.projectiles) {
-            this.scene.projectiles.add(projectile);
-        }
-        
-        // 溅射效果
-        if (this.specialEffects.splash) {
-            projectile.splashDamage = damage * 0.5;
-            projectile.splashRange = 50;
-        }
-    }
-
-    assassinAttack(damage) {
-        // 快速近战攻击（瞬间伤害）
-        if (this.target && this.target.takeDamage) {
-            this.target.takeDamage(damage);
-        }
-        
-        // 闪烁效果
-        this.createFlashEffect();
-    }
-
-    tankAttack(damage) {
-        // 重型炮弹
-        const projectile = new Projectile(this.scene, this.x, this.y, this.target, {
-            damage: damage,
-            speed: 150,
-            sprite: 'shell',
-            color: 0x808080
-        });
-        
-        if (this.scene.projectiles) {
-            this.scene.projectiles.add(projectile);
-        }
-    }
-
-    supportAttack(damage) {
-        // 辅助光束
-        const projectile = new Projectile(this.scene, this.x, this.y, this.target, {
-            damage: damage,
-            speed: 400,
-            sprite: 'beam',
-            color: 0x00ffff
-        });
-        
-        if (this.scene.projectiles) {
-            this.scene.projectiles.add(projectile);
-        }
-        
-        // 治疗周围的塔
-        if (this.specialEffects.healing) {
-            this.healNearbyTowers();
-        }
-    }
-
-    findNearbyTargets(count) {
-        if (!this.scene.monsters || !this.scene.monsters.children) {
-            return [];
-        }
-        
-        const monsters = this.scene.monsters.children.entries;
-        const nearby = monsters
-            .filter(monster => monster !== this.target && monster && monster.x !== undefined && monster.y !== undefined)
-            .filter(monster => {
-                const distance = Phaser.Math.Distance.Between(this.x, this.y, monster.x, monster.y);
-                return distance <= this.range;
-            })
-            .sort((a, b) => {
-                const distA = Phaser.Math.Distance.Between(this.x, this.y, a.x, a.y);
-                const distB = Phaser.Math.Distance.Between(this.x, this.y, b.x, b.y);
-                return distA - distB;
-            });
-        
-        return nearby.slice(0, count);
-    }
 
     healNearbyTowers() {
         // 治疗周围的塔（增加攻击速度）

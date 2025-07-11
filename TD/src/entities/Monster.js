@@ -115,18 +115,28 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     }
 
     moveToNextPoint() {
-        if (this.pathIndex >= this.path.length) {
-            this.reachEnd();
+        // 安全检查：确保场景和路径有效
+        if (!this.scene || !this.scene.tweens || !this.path || this.pathIndex >= this.path.length) {
             return;
         }
         
         const target = this.path[this.pathIndex];
+        if (!target) {
+            this.reachEnd();
+            return;
+        }
+        
         const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
         const duration = (distance / this.speed) * 1000;
         
         // 保存当前的Tween引用，以便在路径更新时可以停止
         if (this.moveTween) {
             this.moveTween.destroy();
+        }
+        
+        // 再次检查场景是否有效
+        if (!this.scene || !this.scene.tweens) {
+            return;
         }
         
         this.moveTween = this.scene.tweens.add({
@@ -136,6 +146,10 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
             duration: duration,
             ease: 'Linear',
             onComplete: () => {
+                // 在回调中也要检查场景是否有效
+                if (!this.scene || !this.scene.tweens) {
+                    return;
+                }
                 this.pathIndex++;
                 this.moveToNextPoint();
             }
@@ -291,6 +305,11 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     performTeleport(distance) {
         if (this.pathIndex >= this.path.length - 1) return;
         
+        // 安全检查：确保场景有效
+        if (!this.scene || !this.scene.tweens || !this.scene.add) {
+            return;
+        }
+        
         // 传送特效
         const teleportEffect = this.scene.add.circle(this.x, this.y, 30, 0xffff00, 0.8);
         this.scene.tweens.add({
@@ -299,7 +318,11 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
             scaleY: 2,
             alpha: 0,
             duration: 300,
-            onComplete: () => teleportEffect.destroy()
+            onComplete: () => {
+                if (teleportEffect && teleportEffect.destroy) {
+                    teleportEffect.destroy();
+                }
+            }
         });
         
         // 沿路径前进一段距离
@@ -341,16 +364,22 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         }
         this.moveToNextPoint();
         
-        // 传送到达特效
-        const arrivalEffect = this.scene.add.circle(this.x, this.y, 20, 0x00ffff, 0.8);
-        this.scene.tweens.add({
-            targets: arrivalEffect,
-            scaleX: 1.5,
-            scaleY: 1.5,
-            alpha: 0,
-            duration: 300,
-            onComplete: () => arrivalEffect.destroy()
-        });
+        // 传送到达特效 - 添加场景安全检查
+        if (this.scene && this.scene.add && this.scene.tweens) {
+            const arrivalEffect = this.scene.add.circle(this.x, this.y, 20, 0x00ffff, 0.8);
+            this.scene.tweens.add({
+                targets: arrivalEffect,
+                scaleX: 1.5,
+                scaleY: 1.5,
+                alpha: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (arrivalEffect && arrivalEffect.destroy) {
+                        arrivalEffect.destroy();
+                    }
+                }
+            });
+        }
     }
 
     updateHealthBar() {
@@ -372,6 +401,11 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     }
 
     showDamageText(damage) {
+        // 安全检查：确保场景有效
+        if (!this.scene || !this.scene.add || !this.scene.tweens) {
+            return;
+        }
+        
         const damageText = this.scene.add.text(this.x, this.y - 10, `-${damage}`, {
             fontSize: '14px',
             fill: '#ffffff',
@@ -388,7 +422,9 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
             duration: 800,
             ease: 'Power2',
             onComplete: () => {
-                damageText.destroy();
+                if (damageText && damageText.destroy) {
+                    damageText.destroy();
+                }
             }
         });
     }
@@ -407,21 +443,23 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
             uiScene.updateGold(this.scene.gameState.gold, this.reward);
         }
         
-        // 死亡特效
-        const deathEffect = this.scene.add.circle(this.x, this.y, 30, 0xffff00, 0.7);
-        
-        this.scene.tweens.add({
-            targets: deathEffect,
-            scaleX: 2,
-            scaleY: 2,
-            alpha: 0,
-            duration: 300,
-            onComplete: () => {
-                if (deathEffect && deathEffect.destroy) {
-                    deathEffect.destroy();
+        // 死亡特效 - 添加场景安全检查
+        if (this.scene && this.scene.add && this.scene.tweens) {
+            const deathEffect = this.scene.add.circle(this.x, this.y, 30, 0xffff00, 0.7);
+            
+            this.scene.tweens.add({
+                targets: deathEffect,
+                scaleX: 2,
+                scaleY: 2,
+                alpha: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (deathEffect && deathEffect.destroy) {
+                        deathEffect.destroy();
+                    }
                 }
-            }
-        });
+            });
+        }
         
         // 通知场景怪物死亡
         if (this.scene && this.scene.onMonsterKilled) {

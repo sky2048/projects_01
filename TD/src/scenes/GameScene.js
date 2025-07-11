@@ -1,4 +1,6 @@
 import { MAP_CONFIG, ECONOMY_CONFIG, WAVE_CONFIG, TOWER_RARITY, EXPERIENCE_CONFIG } from '../config/GameConfig.js';
+import { EQUIPMENT_CONFIG } from '../config/EquipmentConfig.js';
+import { globalObjectPool } from '../utils/ObjectPool.js';
 import { PathFinder } from '../utils/PathFinder.js';
 import { Monster } from '../entities/Monster.js';
 import { Tower } from '../entities/Tower.js';
@@ -798,33 +800,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     shouldProcessCollision(projectile, monster) {
-        // 如果是穿透投射物，检查是否已经击中过这个怪物
-        if (projectile.piercing && projectile.hitTargets) {
-            return !projectile.hitTargets.has(monster);
+        // 对于穿透投射物，检查是否已经击中过这个怪物
+        if (projectile.piercing && projectile.hitTargets && projectile.hitTargets.has(monster)) {
+            return false; // 已经击中过，不再处理碰撞
         }
-        // 非穿透投射物总是处理碰撞
-        return true;
+        
+        // 检查目标是否有效
+        return monster.active && projectile.active;
     }
 
     onProjectileHitMonster(projectile, monster) {
-        // 对怪物造成伤害
-        monster.takeDamage(projectile.damage);
-        
-        // 检查是否是穿透投射物
-        if (projectile.piercing) {
-            // 穿透投射物不立即销毁，记录已击中的怪物避免重复伤害
-            if (!projectile.hitTargets) {
-                projectile.hitTargets = new Set();
-            }
-            projectile.hitTargets.add(monster);
-            
-            // 创建击中效果但不销毁投射物
-            if (projectile.createHitEffect) {
-                projectile.createHitEffect();
-            }
-        } else {
-            // 非穿透投射物正常销毁
-            projectile.destroy();
+        // 直接调用投射物的hit方法，让投射物自己处理击中逻辑
+        if (projectile.hit) {
+            projectile.hit();
         }
     }
 
@@ -1178,7 +1166,7 @@ export class GameScene extends Phaser.Scene {
             keepTower.equipment = [];
         }
         
-        const maxEquipmentSlots = 4; // 每个塔最多4个装备槽位
+        const maxEquipmentSlots = EQUIPMENT_CONFIG.MAX_EQUIPMENT_PER_TOWER;
         let transferredCount = 0;
         let returnedCount = 0;
         
@@ -1186,7 +1174,6 @@ export class GameScene extends Phaser.Scene {
             if (keepTower.equipment.length < maxEquipmentSlots) {
                 // 转移到保留的塔上
                 keepTower.equipment.push(equipment);
-                this.equipmentManager.applyEquipmentToTower(equipment, keepTower);
                 transferredCount++;
             } else {
                 // 塔的装备槽位已满，返还给玩家背包
@@ -1206,6 +1193,12 @@ export class GameScene extends Phaser.Scene {
             } else if (returnedCount > 0) {
                 uiScene.showNotification(`装备已返还背包 ${returnedCount} 件`, 'info', 2000);
             }
+        }
+        
+        // 如果有装备转移，重新计算塔属性
+        if (transferredCount > 0) {
+            this.equipmentManager.ensureOriginalStats(keepTower);
+            this.equipmentManager.recalculateTowerStats(keepTower);
         }
         
         // 更新装备UI
@@ -1282,6 +1275,9 @@ export class GameScene extends Phaser.Scene {
         this.pathPoints = null;
         this.currentMap = null;
         this.selectedMapData = null;
+        
+        // 清理对象池
+        globalObjectPool.clearAll();
         
         console.log('GameScene shutdown 清理完成');
     }

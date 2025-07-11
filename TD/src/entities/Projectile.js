@@ -1,3 +1,5 @@
+import { globalObjectPool } from '../utils/ObjectPool.js';
+
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, target, projectileData) {
         super(scene, x, y, null);
@@ -37,28 +39,50 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     createVisuals() {
+        // 检查场景是否有效
+        if (!this.scene || !this.scene.add) {
+            console.warn('无法创建投射物视觉效果：场景无效');
+            return;
+        }
+        
         // 根据投射物类型创建不同的视觉效果
         let visual;
         
-        switch (this.projectileType) {
-            case 'arrow':
-                visual = this.scene.add.triangle(this.x, this.y, 0, -4, 3, 4, -3, 4, this.color);
-                break;
-            case 'magic':
-                visual = this.scene.add.star(this.x, this.y, 4, 4, 6, this.color);
-                break;
-            case 'shell':
-                visual = this.scene.add.circle(this.x, this.y, 4, this.color);
-                break;
-            case 'beam':
-                visual = this.scene.add.rectangle(this.x, this.y, 2, 8, this.color);
-                break;
-            default:
-                visual = this.scene.add.circle(this.x, this.y, 3, this.color);
+        try {
+            switch (this.projectileType) {
+                case 'arrow':
+                    visual = this.scene.add.triangle(this.x, this.y, 0, -4, 3, 4, -3, 4, this.color);
+                    break;
+                case 'magic':
+                    visual = this.scene.add.star(this.x, this.y, 4, 4, 6, this.color);
+                    break;
+                case 'shell':
+                    visual = this.scene.add.circle(this.x, this.y, 4, this.color);
+                    break;
+                case 'beam':
+                    visual = this.scene.add.rectangle(this.x, this.y, 2, 8, this.color);
+                    break;
+                default:
+                    visual = this.scene.add.circle(this.x, this.y, 3, this.color);
+            }
+            
+            if (visual) {
+                visual.setStrokeStyle(1, 0x000000);
+                this.visual = visual;
+            }
+        } catch (error) {
+            console.error('创建投射物视觉效果失败:', error);
+            // 创建一个简单的圆形作为后备
+            try {
+                visual = this.scene.add.circle(this.x, this.y, 3, this.color || 0xffffff);
+                if (visual) {
+                    visual.setStrokeStyle(1, 0x000000);
+                    this.visual = visual;
+                }
+            } catch (fallbackError) {
+                console.error('创建后备视觉效果也失败:', fallbackError);
+            }
         }
-        
-        visual.setStrokeStyle(1, 0x000000);
-        this.visual = visual;
         
         // 添加尾迹效果
         if (this.projectileType === 'magic') {
@@ -70,6 +94,18 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         this.trailParticles = [];
         this.lastTrailTime = 0;
         this.trailInterval = 50; // 毫秒
+        
+        // 粒子池优化：预创建粒子池，避免频繁创建/销毁
+        this.particlePool = [];
+        this.activeParticles = [];
+        this.poolSize = 6; // 预创建6个粒子，足够一般情况使用
+        
+        // 预创建粒子池
+        for (let i = 0; i < this.poolSize; i++) {
+            const particle = this.scene.add.circle(0, 0, 2, this.color, 0);
+            particle.setVisible(false);
+            this.particlePool.push(particle);
+        }
     }
 
     updateTrailEffect() {
@@ -80,21 +116,46 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         const adjustedInterval = this.trailInterval / timeScale;
         
         if (currentTime - this.lastTrailTime > adjustedInterval) {
-            const particle = this.scene.add.circle(this.x, this.y, 2, this.color, 0.5);
-            this.trailParticles.push(particle);
+            // 优化：使用对象池重用粒子，避免频繁创建销毁
+            let particle = null;
             
-            this.scene.tweens.add({
-                targets: particle,
-                alpha: 0,
-                duration: 300 / timeScale,
-                onComplete: () => {
-                    particle.destroy();
-                    const index = this.trailParticles.indexOf(particle);
-                    if (index > -1) {
-                        this.trailParticles.splice(index, 1);
+            if (this.particlePool && this.particlePool.length > 0) {
+                // 从池中获取粒子
+                particle = this.particlePool.pop();
+                particle.setPosition(this.x, this.y);
+                particle.setAlpha(0.5);
+                particle.setVisible(true);
+            } else {
+                // 池已空，创建新粒子（降级处理）
+                particle = this.scene.add.circle(this.x, this.y, 2, this.color, 0.5);
+            }
+            
+            if (particle) {
+                this.activeParticles.push(particle);
+                
+                this.scene.tweens.add({
+                    targets: particle,
+                    alpha: 0,
+                    duration: 300 / timeScale,
+                    onComplete: () => {
+                        // 优化：回收粒子到池中而不是销毁
+                        const index = this.activeParticles.indexOf(particle);
+                        if (index > -1) {
+                            this.activeParticles.splice(index, 1);
+                        }
+                        
+                        if (this.particlePool && this.particlePool.length < this.poolSize) {
+                            // 回收到池中
+                            particle.setVisible(false);
+                            particle.setAlpha(0.5); // 重置alpha
+                            this.particlePool.push(particle);
+                        } else {
+                            // 池已满或已销毁，直接销毁粒子
+                            particle.destroy();
+                        }
                     }
-                }
-            });
+                });
+            }
             
             this.lastTrailTime = currentTime;
         }
@@ -133,7 +194,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         const distance = Phaser.Math.Distance.Between(this.x, this.y, this.target.x, this.target.y);
         
         // 设置旋转角度（对于箭矢）
-        if (this.projectileType === 'arrow') {
+        if (this.projectileType === 'arrow' && this.visual) {
             this.visual.rotation = angle + Math.PI / 2;
         }
         
@@ -182,7 +243,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
             const distance = Phaser.Math.Distance.Between(this.x, this.y, this.target.x, this.target.y);
             
             // 设置旋转角度
-            if (this.projectileType === 'arrow') {
+            if (this.projectileType === 'arrow' && this.visual) {
                 this.visual.rotation = angle + Math.PI / 2;
             }
             
@@ -267,7 +328,26 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
             this.applySlowEffect();
         }
         
-        this.destroy();
+        // 穿透处理
+        if (this.piercing) {
+            // 记录已击中的目标
+            if (!this.hitTargets) {
+                this.hitTargets = new Set();
+            }
+            this.hitTargets.add(this.target);
+            
+            // 检查是否达到最大穿透次数
+            if (this.hitTargets.size >= this.maxPiercingHits) {
+                this.destroy();
+                return;
+            }
+            
+            // 继续寻找下一个目标，不销毁
+            this.findNextPiercingTarget();
+        } else {
+            // 非穿透投射物正常销毁
+            this.destroy();
+        }
     }
 
     createHitEffect() {
@@ -394,24 +474,103 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         }
         
         // 更新视觉元素位置
-        if (this.visual) {
-            this.visual.x = this.x;
-            this.visual.y = this.y;
+        if (this.visual && this.visual.setPosition) {
+            try {
+                this.visual.setPosition(this.x, this.y);
+            } catch (error) {
+                console.warn('更新投射物视觉位置失败:', error);
+                // 如果视觉元素已损坏，尝试重新创建
+                this.visual = null;
+                this.createVisuals();
+            }
         }
     }
 
     destroy() {
-        // 清理资源
-        if (this.visual) this.visual.destroy();
-        
-        // 清理尾迹粒子
-        if (this.trailParticles) {
-            this.trailParticles.forEach(particle => {
-                if (particle && particle.destroy) particle.destroy();
-            });
-            this.trailParticles = [];
+        // 停止移动
+        this.useTrackingMovement = false;
+        if (this.body) {
+            this.body.setVelocity(0, 0);
         }
         
+        // 清理主要视觉元素
+        if (this.visual && this.visual.destroy) {
+            this.visual.destroy();
+            this.visual = null;
+        }
+        
+        // 清理活跃的粒子动画
+        if (this.activeParticles) {
+            this.activeParticles.forEach(particle => {
+                if (particle && particle.destroy) {
+                    particle.destroy();
+                }
+            });
+            this.activeParticles = [];
+        }
+        
+        // 清理粒子池
+        if (this.particlePool) {
+            this.particlePool.forEach(particle => {
+                if (particle && particle.destroy) {
+                    particle.destroy();
+                }
+            });
+            this.particlePool = [];
+        }
+        
+        // 从场景的投射物组中移除
+        if (this.scene && this.scene.projectiles) {
+            this.scene.projectiles.remove(this);
+        }
+        
+        // 隐藏对象但不销毁（为对象池准备）
+        this.setVisible(false);
+        this.setActive(false);
+        
+        // 返回到对象池
+        const poolType = `projectile_${this.projectileType || 'default'}`;
+        globalObjectPool.release(poolType, this);
+    }
+    
+    // 真正的销毁方法（当对象池满时调用）
+    realDestroy() {
+        // 清理尾迹效果
+        if (this.trailParticles) {
+            this.trailParticles.forEach(particle => {
+                if (particle && particle.destroy) {
+                    particle.destroy();
+                }
+            });
+            this.trailParticles = null;
+        }
+        
+        // 优化：清理粒子池
+        if (this.particlePool) {
+            this.particlePool.forEach(particle => {
+                if (particle && particle.destroy) {
+                    particle.destroy();
+                }
+            });
+            this.particlePool = null;
+        }
+        
+        if (this.activeParticles) {
+            this.activeParticles.forEach(particle => {
+                if (particle && particle.destroy) {
+                    particle.destroy();
+                }
+            });
+            this.activeParticles = null;
+        }
+        
+        // 清理视觉效果
+        if (this.visual) {
+            this.visual.destroy();
+            this.visual = null;
+        }
+        
+        // 调用父类销毁方法
         super.destroy();
     }
 } 

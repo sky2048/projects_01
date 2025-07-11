@@ -203,11 +203,14 @@ export class EquipmentManager {
         // 从背包移除装备
         this.inventory = this.inventory.filter(item => item.id !== equipmentId);
         
+        // 确保塔的原始属性被保存
+        this.ensureOriginalStats(tower);
+        
         // 添加到塔的装备列表
         tower.equipment.push(equipment);
         
-        // 应用装备效果
-        this.applyEquipmentToTower(equipment, tower);
+        // 重新计算塔的所有属性
+        this.recalculateTowerStats(tower);
         
         // 更新UI
         this.updateInventoryUI();
@@ -240,8 +243,8 @@ export class EquipmentManager {
         // 从塔上移除装备
         tower.equipment.splice(equipmentIndex, 1);
         
-        // 移除装备效果
-        this.removeEquipmentFromTower(equipment, tower);
+        // 重新计算塔的所有属性
+        this.recalculateTowerStats(tower);
         
         // 放回背包
         this.inventory.push(equipment);
@@ -253,11 +256,8 @@ export class EquipmentManager {
         return true;
     }
 
-    // 应用装备效果到塔
-    applyEquipmentToTower(equipment, tower) {
-        const effect = equipment.effect;
-        
-        // 保存原始属性（如果还没保存的话）
+    // 初始化塔的原始属性（如果还没保存的话）
+    ensureOriginalStats(tower) {
         if (!tower.originalStats) {
             tower.originalStats = {
                 damage: tower.damage,
@@ -265,55 +265,6 @@ export class EquipmentManager {
                 attackSpeed: tower.attackSpeed
             };
         }
-        
-        // 应用属性修改
-        if (effect.damage !== undefined) {
-            if (typeof effect.damage === 'number' && effect.damage > 1) {
-                // 固定数值加成
-                tower.damage += effect.damage;
-            } else {
-                // 百分比加成
-                tower.damage = tower.originalStats.damage * (1 + effect.damage);
-            }
-        }
-        
-        if (effect.attackSpeed !== undefined) {
-            tower.attackSpeed = tower.originalStats.attackSpeed * (1 + effect.attackSpeed);
-            tower.attackCooldown = 1000 / tower.attackSpeed;
-        }
-        
-        if (effect.range !== undefined) {
-            if (effect.range > 1) {
-                // 倍数加成（如疾射火炮）
-                tower.range = tower.originalStats.range * effect.range;
-            } else {
-                // 百分比加成
-                tower.range = tower.originalStats.range * (1 + effect.range);
-            }
-            // 更新射程指示器
-            if (tower.rangeIndicator) {
-                tower.rangeIndicator.setRadius(tower.range);
-            }
-        }
-        
-        // 特殊效果
-        if (effect.addSynergy) {
-            if (!tower.additionalSynergies) {
-                tower.additionalSynergies = [];
-            }
-            tower.additionalSynergies.push(effect.addSynergy);
-        }
-        
-        // 标记塔需要重新计算羁绊
-        if (this.scene && this.scene.calculateSynergies) {
-            this.scene.calculateSynergies();
-        }
-    }
-
-    // 从塔上移除装备效果
-    removeEquipmentFromTower(equipment, tower) {
-        // 重新计算所有装备效果
-        this.recalculateTowerStats(tower);
     }
 
     // 重新计算塔的属性
@@ -328,16 +279,72 @@ export class EquipmentManager {
         // 清除附加羁绊
         tower.additionalSynergies = [];
         
-        // 重新应用所有装备效果
-        if (tower.equipment) {
+        // 累计所有装备的属性加成
+        if (tower.equipment && tower.equipment.length > 0) {
+            let totalDamageFlat = 0;
+            let totalDamagePercent = 0;
+            let totalAttackSpeedPercent = 0;
+            let totalRangeFlat = 0;
+            let totalRangePercent = 0;
+            let totalRangeMultiplier = 1;
+            
+            // 遍历所有装备，累加各类属性加成
             tower.equipment.forEach(equipment => {
-                this.applyEquipmentToTower(equipment, tower);
+                const effect = equipment.effect;
+                
+                // 累加伤害加成
+                if (effect.damage !== undefined) {
+                    if (typeof effect.damage === 'number' && effect.damage > 1) {
+                        // 固定数值加成
+                        totalDamageFlat += effect.damage;
+                    } else {
+                        // 百分比加成
+                        totalDamagePercent += effect.damage;
+                    }
+                }
+                
+                // 累加攻击速度加成
+                if (effect.attackSpeed !== undefined) {
+                    totalAttackSpeedPercent += effect.attackSpeed;
+                }
+                
+                // 累加射程加成
+                if (effect.range !== undefined) {
+                    if (effect.range > 1) {
+                        // 倍数加成（如疾射火炮）
+                        totalRangeMultiplier *= effect.range;
+                    } else {
+                        // 百分比加成
+                        totalRangePercent += effect.range;
+                    }
+                }
+                
+                // 特殊效果：羁绊加成
+                if (effect.addSynergy) {
+                    if (!tower.additionalSynergies) {
+                        tower.additionalSynergies = [];
+                    }
+                    tower.additionalSynergies.push(effect.addSynergy);
+                }
             });
+            
+            // 应用累计的属性加成
+            tower.damage = (tower.originalStats.damage + totalDamageFlat) * (1 + totalDamagePercent);
+            tower.attackSpeed = tower.originalStats.attackSpeed * (1 + totalAttackSpeedPercent);
+            tower.range = (tower.originalStats.range + totalRangeFlat) * (1 + totalRangePercent) * totalRangeMultiplier;
+            
+            // 更新攻击冷却时间
+            tower.attackCooldown = 1000 / tower.attackSpeed;
         }
         
         // 更新射程指示器
         if (tower.rangeIndicator) {
             tower.rangeIndicator.setRadius(tower.range);
+        }
+        
+        // 标记塔需要重新计算羁绊
+        if (this.scene && this.scene.calculateSynergies) {
+            this.scene.calculateSynergies();
         }
     }
 

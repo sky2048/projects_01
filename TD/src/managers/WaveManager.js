@@ -250,11 +250,36 @@ export class WaveManager {
     // 停止波次管理器
     stopWave() {
         this.waveInProgress = false;
-        this.currentWave = 0;
-        this.monstersInWave = 0;
         this.monstersSpawned = 0;
-        this.lastSpawnTime = 0;
-        this.waveStartTime = 0;
-        console.log('WaveManager 已停止');
+        this.monstersInWave = 0;
+        
+        // 清理所有怪物
+        if (this.scene.monsters && this.scene.monsters.children) {
+            this.scene.monsters.children.entries.forEach(monster => {
+                if (monster && monster.destroy) {
+                    monster.destroy();
+                }
+            });
+        }
+        
+        console.log('波次已停止');
+    }
+
+    forceEndWave() {
+        if (!this.waveInProgress) {
+            console.log('当前没有进行中的波次');
+            return;
+        }
+        
+        console.log(`强制结束第 ${this.currentWave} 波`);
+        
+        // 直接完成当前波次
+        this.completeWave();
+        
+        // 显示GM提示
+        const uiScene = this.scene.scene.get('UIScene');
+        if (uiScene && uiScene.showNotification) {
+            uiScene.showNotification(`GM工具：强制结束第 ${this.currentWave} 波`, 'info', 2000);
+        }
     }
 } 

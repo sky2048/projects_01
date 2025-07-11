@@ -18,6 +18,10 @@ export class UIScene extends Phaser.Scene {
         this.notificationUI = null;
         this.tooltipUI = null;
         
+        // GM面板状态
+        this.gmPanelVisible = false;
+        this.gmPanelElements = [];
+        
         // 兼容性属性
         this.TOWER_RARITY = TOWER_RARITY;
     }
@@ -341,10 +345,32 @@ export class UIScene extends Phaser.Scene {
     }
 
     createControlButtons() {
+        // GM工具按钮（右上角最上方）
+        this.gmButton = this.add.rectangle(1230, 30, 80, 35, 0x8b5cf6);
+        this.gmText = this.add.text(1230, 30, 'GM工具', {
+            fontSize: '14px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif'
+        });
+        this.gmText.setOrigin(0.5);
+
+        this.gmButton.setInteractive();
+        this.gmButton.on('pointerdown', () => {
+            this.toggleGMPanel();
+        });
+
+        this.gmButton.on('pointerover', () => {
+            this.gmButton.setFillStyle(0x9f7aea);
+        });
+
+        this.gmButton.on('pointerout', () => {
+            this.gmButton.setFillStyle(0x8b5cf6);
+        });
+
         // 返回主界面按钮（右上角）
-        this.menuButton = this.add.rectangle(1150, 30, 100, 40, 0x6c757d);
-        this.menuText = this.add.text(1150, 30, '返回菜单', {
-            fontSize: '16px',
+        this.menuButton = this.add.rectangle(1140, 30, 80, 35, 0x6c757d);
+        this.menuText = this.add.text(1140, 30, '返回菜单', {
+            fontSize: '14px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
@@ -364,9 +390,9 @@ export class UIScene extends Phaser.Scene {
         });
 
         // 暂停按钮
-        this.pauseButton = this.add.rectangle(1150, 80, 100, 40, 0x4a90e2);
-        this.pauseText = this.add.text(1150, 80, '暂停', {
-            fontSize: '18px',
+        this.pauseButton = this.add.rectangle(1140, 75, 80, 35, 0x4a90e2);
+        this.pauseText = this.add.text(1140, 75, '暂停', {
+            fontSize: '16px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
@@ -378,9 +404,9 @@ export class UIScene extends Phaser.Scene {
         });
 
         // 加速按钮
-        this.speedButton = this.add.rectangle(1150, 130, 100, 40, 0x4a90e2);
-        this.speedText = this.add.text(1150, 130, '加速', {
-            fontSize: '18px',
+        this.speedButton = this.add.rectangle(1230, 75, 80, 35, 0x4a90e2);
+        this.speedText = this.add.text(1230, 75, '加速', {
+            fontSize: '16px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
@@ -418,6 +444,220 @@ export class UIScene extends Phaser.Scene {
             gameScene.tweens.timeScale = 1;
             gameScene.time.timeScale = 1;
             this.speedText.setText('加速');
+        }
+    }
+
+    toggleGMPanel() {
+        if (this.gmPanelVisible) {
+            this.hideGMPanel();
+        } else {
+            this.showGMPanel();
+        }
+    }
+
+    showGMPanel() {
+        if (this.gmPanelVisible) return;
+        
+        this.gmPanelVisible = true;
+        
+        // 半透明背景
+        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.5);
+        this.gmPanelElements.push(overlay);
+        
+        // GM面板背景
+        const panelBg = this.add.rectangle(640, 360, 500, 400, 0x2c2c54);
+        panelBg.setStrokeStyle(3, 0x8b5cf6);
+        this.gmPanelElements.push(panelBg);
+        
+        // 标题
+        const title = this.add.text(640, 200, 'GM工具面板', {
+            fontSize: '24px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold'
+        });
+        title.setOrigin(0.5);
+        this.gmPanelElements.push(title);
+        
+        // 副标题
+        const subtitle = this.add.text(640, 230, '调试和测试功能', {
+            fontSize: '16px',
+            fill: '#cccccc',
+            fontFamily: 'Arial, sans-serif'
+        });
+        subtitle.setOrigin(0.5);
+        this.gmPanelElements.push(subtitle);
+        
+        // 创建GM功能按钮
+        this.createGMButtons();
+        
+        // 关闭按钮
+        const closeButton = this.add.rectangle(800, 180, 60, 30, 0xff4444);
+        const closeText = this.add.text(800, 180, '关闭', {
+            fontSize: '14px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif'
+        });
+        closeText.setOrigin(0.5);
+        
+        closeButton.setInteractive();
+        closeButton.on('pointerdown', () => {
+            this.hideGMPanel();
+        });
+        
+        closeButton.on('pointerover', () => {
+            closeButton.setFillStyle(0xff6666);
+        });
+        
+        closeButton.on('pointerout', () => {
+            closeButton.setFillStyle(0xff4444);
+        });
+        
+        this.gmPanelElements.push(closeButton, closeText);
+        
+        // 点击背景关闭
+        overlay.setInteractive();
+        overlay.on('pointerdown', () => {
+            this.hideGMPanel();
+        });
+    }
+
+    createGMButtons() {
+        const buttonWidth = 200;
+        const buttonHeight = 40;
+        const buttonSpacing = 50;
+        const startY = 280;
+        
+        // GM功能按钮配置
+        const gmButtons = [
+            {
+                text: '增加1000金币',
+                color: 0xffd700,
+                action: () => this.gmAddGold(1000)
+            },
+            {
+                text: '回复满血',
+                color: 0xff4444,
+                action: () => this.gmRestoreHealth()
+            },
+            {
+                text: '增加经验',
+                color: 0x00ff88,
+                action: () => this.gmAddExperience(50)
+            },
+            {
+                text: '跳过当前波次',
+                color: 0x4a90e2,
+                action: () => this.gmSkipWave()
+            },
+            {
+                text: '清空所有怪物',
+                color: 0xff6b6b,
+                action: () => this.gmClearMonsters()
+            }
+        ];
+        
+        gmButtons.forEach((buttonConfig, index) => {
+            const y = startY + index * buttonSpacing;
+            
+            // 按钮背景
+            const button = this.add.rectangle(640, y, buttonWidth, buttonHeight, buttonConfig.color);
+            button.setStrokeStyle(2, 0xffffff, 0.5);
+            
+            // 按钮文字
+            const buttonText = this.add.text(640, y, buttonConfig.text, {
+                fontSize: '16px',
+                fill: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold'
+            });
+            buttonText.setOrigin(0.5);
+            
+            // 按钮交互
+            button.setInteractive();
+            button.on('pointerdown', () => {
+                buttonConfig.action();
+                this.showNotification(`执行: ${buttonConfig.text}`, 'success', 1500);
+            });
+            
+            button.on('pointerover', () => {
+                button.setFillStyle(buttonConfig.color, 0.8);
+                button.setScale(1.05);
+            });
+            
+            button.on('pointerout', () => {
+                button.setFillStyle(buttonConfig.color, 1);
+                button.setScale(1);
+            });
+            
+            this.gmPanelElements.push(button, buttonText);
+        });
+    }
+
+    hideGMPanel() {
+        if (!this.gmPanelVisible) return;
+        
+        this.gmPanelVisible = false;
+        
+        // 销毁所有GM面板元素
+        this.gmPanelElements.forEach(element => {
+            if (element && element.destroy) {
+                element.destroy();
+            }
+        });
+        this.gmPanelElements = [];
+    }
+
+    // GM功能方法
+    gmAddGold(amount) {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.gameState) {
+            gameScene.gameState.gold += amount;
+            this.updateGold(gameScene.gameState.gold, amount);
+        }
+    }
+
+    gmRestoreHealth() {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.gameState) {
+            const oldHealth = gameScene.gameState.health;
+            gameScene.gameState.health = 100;
+            this.updateHealth(gameScene.gameState.health, 100 - oldHealth);
+        }
+    }
+
+    gmAddExperience(amount) {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.addExperience) {
+            gameScene.addExperience(amount, 'GM工具');
+        }
+    }
+
+    gmSkipWave() {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.waveManager) {
+            // 清空当前波次的怪物
+            this.gmClearMonsters();
+            
+            // 强制结束当前波次
+            gameScene.waveManager.forceEndWave();
+        }
+    }
+
+    gmClearMonsters() {
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.monsters && gameScene.monsters.children) {
+            const monsters = [...gameScene.monsters.children.entries];
+            monsters.forEach(monster => {
+                if (monster && monster.destroyVisuals && monster.destroy) {
+                    // 先清理视觉效果和动画
+                    monster.destroyVisuals();
+                    // 然后销毁怪物本身
+                    monster.destroy();
+                }
+            });
+            // 清空怪物组
+            gameScene.monsters.clear();
         }
     }
 
@@ -638,6 +878,7 @@ export class UIScene extends Phaser.Scene {
         if (this.menuButton) this.menuButton.setInteractive(interactive);
         if (this.pauseButton) this.pauseButton.setInteractive(interactive);
         if (this.speedButton) this.speedButton.setInteractive(interactive);
+        if (this.gmButton) this.gmButton.setInteractive(interactive);
     }
 
     // 清理游戏结束界面
@@ -668,6 +909,9 @@ export class UIScene extends Phaser.Scene {
     // 场景关闭时的清理方法
     shutdown() {
         console.log('UIScene shutdown 开始清理资源...');
+        
+        // 清理GM面板
+        this.hideGMPanel();
         
         // 清理游戏结束UI
         this.clearGameOverUI();
@@ -703,6 +947,11 @@ export class UIScene extends Phaser.Scene {
         if (this.menuButton) {
             this.menuButton.destroy();
             this.menuButton = null;
+        }
+        
+        if (this.gmButton) {
+            this.gmButton.destroy();
+            this.gmButton = null;
         }
         
         console.log('UIScene shutdown 清理完成');

@@ -1,9 +1,83 @@
 import { ECONOMY_CONFIG, TOWER_RARITY, LEVEL_RARITY_MODIFIERS } from '../config/GameConfig.js';
+import { globalObjectPool } from '../utils/ObjectPool.js';
+
+// UI布局常量
+const UI_LAYOUT = {
+    STATUS_BAR: {
+        Y: 560,
+        CENTER_X: 640,
+        TRAPEZOID_WIDTH: 160,
+        TRAPEZOID_HEIGHT: 40,
+        SKEW: 15,
+        GAP: 15
+    },
+    LEVEL_SECTION: {
+        X: 180,
+        Y: 610,
+        EXP_BAR_WIDTH: 120,
+        EXP_BAR_HEIGHT: 8,
+        BUTTON_WIDTH: 120,
+        BUTTON_HEIGHT: 25
+    },
+    PROBABILITY_SECTION: {
+        X: 50,
+        Y: 420,
+        LINE_HEIGHT: 18
+    }
+};
+
+// 文本样式常量
+const TEXT_STYLES = {
+    MAIN_STATUS: {
+        fontSize: '32px',
+        fill: '#ffffff',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+    },
+    LEVEL_TEXT: {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2
+    },
+    EXP_TEXT: {
+        fontSize: '14px',
+        fill: '#00ff88',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2
+    },
+    BUTTON_TEXT: {
+        fontSize: '10px',
+        fill: '#ffffff',
+        fontFamily: 'Arial, sans-serif'
+    }
+};
+
+// 颜色主题常量
+const COLOR_THEMES = {
+    HEALTH: {
+        HIGH: { bg: 0x44ff44, icon: 0x44ff44, stroke: 0x00ff00 },
+        MEDIUM: { bg: 0xffaa00, icon: 0xffaa00, stroke: 0xff8800 },
+        LOW: { bg: 0xff4444, icon: 0xff4444, stroke: 0xff0000 }
+    },
+    TOWER_LIMIT: {
+        FULL: { bg: 0xff4444, icon: '🔴' },
+        HIGH: { bg: 0xffaa00, icon: '🟠' },
+        NORMAL: { bg: 0x4488ff, icon: '🏰' }
+    }
+};
 
 export class StatusUI {
     constructor(scene) {
         this.scene = scene;
         this.elements = {};
+        this.cachedGameScene = null; // 缓存游戏场景引用
         
         // 确保elements对象总是被正确初始化
         this.resetElements();
@@ -56,102 +130,78 @@ export class StatusUI {
         
         console.log('StatusUI create 开始...');
         
-        this.createStatusBar();
-        this.createWaveDisplay();
-        this.createLevelAndExperience();
-        this.createRarityProbabilityDisplay();
-        this.createVersionDisplay();
+        try {
+            this.createStatusBar();
+            this.createWaveDisplay();
+            this.createLevelAndExperience();
+            this.createRarityProbabilityDisplay();
+            this.createVersionDisplay();
+            
+            console.log('StatusUI create 完成');
+        } catch (error) {
+            console.error('StatusUI创建失败:', error);
+            throw error;
+        }
+    }
+
+    // 创建梯形背景的通用方法
+    createTrapezoidBackground(x, y, strokeColor, fillColor = 0x1a1a2e) {
+        const { TRAPEZOID_WIDTH, TRAPEZOID_HEIGHT, SKEW } = UI_LAYOUT.STATUS_BAR;
         
-        console.log('StatusUI create 完成');
+        const trapezoidPoints = [
+            SKEW, 0,
+            TRAPEZOID_WIDTH, 0,
+            TRAPEZOID_WIDTH - SKEW, TRAPEZOID_HEIGHT,
+            0, TRAPEZOID_HEIGHT
+        ];
+        
+        const background = this.scene.add.polygon(x, y, trapezoidPoints, fillColor);
+        background.setStrokeStyle(3, strokeColor, 1);
+        
+        const glow = this.scene.add.polygon(x, y, trapezoidPoints, strokeColor & 0x444444, 0.7);
+        
+        return { background, glow };
     }
 
     createStatusBar() {
-        // 金币显示（移至商店上方，棋盘下方）
-        const goldDisplayY = 560; // 商店上方位置，避免重叠
-        const goldDisplayX = 640; // 屏幕中心位置
-        
-        // 梯形背景通用参数
-        const trapezoidWidth = 160;
-        const trapezoidHeight = 40;
-        const skew = 15; // 倾斜度
-        const spacing = 200; // 两个显示框之间的间距
-        
-        // 创建梯形路径
-        const trapezoidPoints = [
-            skew, 0,                           // 左上
-            trapezoidWidth, 0,                 // 右上  
-            trapezoidWidth - skew, trapezoidHeight, // 右下
-            0, trapezoidHeight                 // 左下
-        ];
-        
-        // 计算三个梯形的居中位置
-        const gapBetweenBoxes = 15; // 梯形之间的间隙
+        const { Y, CENTER_X, GAP } = UI_LAYOUT.STATUS_BAR;
+        const { TRAPEZOID_WIDTH } = UI_LAYOUT.STATUS_BAR;
         
         // 血量显示（左侧）
-        const healthDisplayX = goldDisplayX - trapezoidWidth - gapBetweenBoxes;
+        const healthDisplayX = CENTER_X - TRAPEZOID_WIDTH - GAP;
+        const healthBg = this.createTrapezoidBackground(healthDisplayX, Y, 0xff4444);
+        this.elements.healthBackground = healthBg.background;
+        this.elements.healthBackgroundGlow = healthBg.glow;
         
-        this.elements.healthBackground = this.scene.add.polygon(healthDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
-        this.elements.healthBackground.setStrokeStyle(3, 0xff4444, 1);
-        
-        // 血量内部渐变效果
-        this.elements.healthBackgroundGlow = this.scene.add.polygon(healthDisplayX, goldDisplayY, trapezoidPoints, 0x442222, 0.7);
-        
-        this.elements.healthIcon = this.scene.add.circle(healthDisplayX - 35, goldDisplayY, 12, 0xff4444);
+        this.elements.healthIcon = this.scene.add.circle(healthDisplayX - 35, Y, 12, 0xff4444);
         this.elements.healthIcon.setStrokeStyle(2, 0xff0000);
         
-        this.elements.healthText = this.scene.add.text(healthDisplayX + 5, goldDisplayY, '100', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
-        });
+        this.elements.healthText = this.scene.add.text(healthDisplayX + 5, Y, '100', TEXT_STYLES.MAIN_STATUS);
         this.elements.healthText.setOrigin(0.5, 0.5);
         
         // 塔位显示（中间）
-        const towerLimitDisplayX = goldDisplayX;
+        const towerLimitBg = this.createTrapezoidBackground(CENTER_X, Y, 0x4488ff);
+        this.elements.towerLimitBackground = towerLimitBg.background;
+        this.elements.towerLimitBackgroundGlow = towerLimitBg.glow;
         
-        this.elements.towerLimitBackground = this.scene.add.polygon(towerLimitDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
-        this.elements.towerLimitBackground.setStrokeStyle(3, 0x4488ff, 1);
-        
-        this.elements.towerLimitBackgroundGlow = this.scene.add.polygon(towerLimitDisplayX, goldDisplayY, trapezoidPoints, 0x223344, 0.7);
-        
-        this.elements.towerLimitIcon = this.scene.add.text(towerLimitDisplayX - 35, goldDisplayY, '🏰', {
+        this.elements.towerLimitIcon = this.scene.add.text(CENTER_X - 35, Y, '🏰', {
             fontSize: '16px'
         });
         this.elements.towerLimitIcon.setOrigin(0.5);
         
-        this.elements.towerLimitText = this.scene.add.text(towerLimitDisplayX + 5, goldDisplayY, '0/2', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
-        });
+        this.elements.towerLimitText = this.scene.add.text(CENTER_X + 5, Y, '0/2', TEXT_STYLES.MAIN_STATUS);
         this.elements.towerLimitText.setOrigin(0.5, 0.5);
         
         // 金币显示（右侧）
-        const goldRealDisplayX = goldDisplayX + trapezoidWidth + gapBetweenBoxes;
+        const goldDisplayX = CENTER_X + TRAPEZOID_WIDTH + GAP;
+        const goldBg = this.createTrapezoidBackground(goldDisplayX, Y, 0xffd700);
+        this.elements.goldBackground = goldBg.background;
+        this.elements.goldBackgroundGlow = goldBg.glow;
         
-        this.elements.goldBackground = this.scene.add.polygon(goldRealDisplayX, goldDisplayY, trapezoidPoints, 0x1a1a2e);
-        this.elements.goldBackground.setStrokeStyle(3, 0xffd700, 1);
-        
-        // 金币内部渐变效果
-        this.elements.goldBackgroundGlow = this.scene.add.polygon(goldRealDisplayX, goldDisplayY, trapezoidPoints, 0x2c2c54, 0.7);
-        
-        this.elements.goldIcon = this.scene.add.circle(goldRealDisplayX - 35, goldDisplayY, 12, 0xffd700);
+        this.elements.goldIcon = this.scene.add.circle(goldDisplayX - 35, Y, 12, 0xffd700);
         this.elements.goldIcon.setStrokeStyle(2, 0xffaa00);
         
-        this.elements.goldText = this.scene.add.text(goldRealDisplayX + 5, goldDisplayY, '100', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
-        });
+        this.elements.goldText = this.scene.add.text(goldDisplayX + 5, Y, '100', TEXT_STYLES.MAIN_STATUS);
         this.elements.goldText.setOrigin(0.5, 0.5);
     }
 
@@ -190,57 +240,28 @@ export class StatusUI {
     }
 
     createLevelAndExperience() {
-        // 左侧信息显示区域 - 按要求重新设计布局
-        const leftDisplayX = 180;
-        const leftInfoY = 610;
+        const { X, Y, EXP_BAR_WIDTH, EXP_BAR_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT } = UI_LAYOUT.LEVEL_SECTION;
         
         // 等级和经验文本显示 - 在同一行
-        this.elements.levelText = this.scene.add.text(leftDisplayX - 30, leftInfoY, '1级', {
-            fontSize: '18px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
-        });
+        this.elements.levelText = this.scene.add.text(X - 30, Y, '1级', TEXT_STYLES.LEVEL_TEXT);
         this.elements.levelText.setOrigin(0.5, 0.5);
 
-        // 经验值显示 - 与等级在同一行
-        this.elements.experienceValueText = this.scene.add.text(leftDisplayX + 30, leftInfoY, '0/15', {
-            fontSize: '14px',
-            fill: '#00ff88',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
-        });
+        this.elements.experienceValueText = this.scene.add.text(X + 30, Y, '0/15', TEXT_STYLES.EXP_TEXT);
         this.elements.experienceValueText.setOrigin(0.5, 0.5);
 
         // 经验进度条 - 位于等级文本下方
-        const expBarY = leftInfoY + 16;
-        const expBarWidth = 120;
-        const expBarHeight = 8;
+        const expBarY = Y + 16;
         
-        // 经验进度条背景
-        this.elements.expBarBackground = this.scene.add.rectangle(leftDisplayX, expBarY, expBarWidth, expBarHeight, 0x333333);
+        this.elements.expBarBackground = this.scene.add.rectangle(X, expBarY, EXP_BAR_WIDTH, EXP_BAR_HEIGHT, 0x333333);
         this.elements.expBarBackground.setStrokeStyle(2, 0x666666);
         
-        // 经验进度条前景
-        this.elements.expBarForeground = this.scene.add.rectangle(leftDisplayX - expBarWidth/2, expBarY, 0, expBarHeight, 0x00ff88);
+        this.elements.expBarForeground = this.scene.add.rectangle(X - EXP_BAR_WIDTH/2, expBarY, 0, EXP_BAR_HEIGHT, 0x00ff88);
         this.elements.expBarForeground.setOrigin(0, 0.5);
         
-        // 购买经验按钮 - 放在经验进度条下方
-        const expButtonWidth = 120;
-        const expButtonHeight = 25;
-        const expButtonX = leftDisplayX;
+        // 购买经验按钮
         const expButtonY = expBarY + 26;
-        
-        this.elements.upgradeButton = this.scene.add.rectangle(expButtonX, expButtonY, expButtonWidth, expButtonHeight, 0x28a745);
-        this.elements.upgradeText = this.scene.add.text(expButtonX, expButtonY, `购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`, {
-            fontSize: '10px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
+        this.elements.upgradeButton = this.scene.add.rectangle(X, expButtonY, BUTTON_WIDTH, BUTTON_HEIGHT, 0x28a745);
+        this.elements.upgradeText = this.scene.add.text(X, expButtonY, `购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`, TEXT_STYLES.BUTTON_TEXT);
         this.elements.upgradeText.setOrigin(0.5);
 
         this.elements.upgradeButton.setInteractive();
@@ -248,16 +269,10 @@ export class StatusUI {
             this.scene.handleBuyExperience();
         });
 
-        // 刷新按钮 - 放在购买经验按钮下方
-        const refreshButtonX = leftDisplayX;
+        // 刷新按钮
         const refreshButtonY = expButtonY + 35;
-        
-        this.elements.refreshButton = this.scene.add.rectangle(refreshButtonX, refreshButtonY, expButtonWidth, expButtonHeight, 0x4a90e2);
-        this.elements.refreshText = this.scene.add.text(refreshButtonX, refreshButtonY, `刷新商店(-${ECONOMY_CONFIG.REFRESH_COST})`, {
-            fontSize: '10px',
-            fill: '#ffffff',
-            fontFamily: 'Arial, sans-serif'
-        });
+        this.elements.refreshButton = this.scene.add.rectangle(X, refreshButtonY, BUTTON_WIDTH, BUTTON_HEIGHT, 0x4a90e2);
+        this.elements.refreshText = this.scene.add.text(X, refreshButtonY, `刷新商店(-${ECONOMY_CONFIG.REFRESH_COST})`, TEXT_STYLES.BUTTON_TEXT);
         this.elements.refreshText.setOrigin(0.5);
 
         this.elements.refreshButton.setInteractive();
@@ -267,12 +282,10 @@ export class StatusUI {
     }
 
     createRarityProbabilityDisplay() {
-        // 品质概率显示位置 - 在左侧，羁绊显示下方
-        const probabilityX = 50;
-        const probabilityY = 420;
+        const { X, Y, LINE_HEIGHT } = UI_LAYOUT.PROBABILITY_SECTION;
         
         // 标题
-        this.elements.probabilityTitle = this.scene.add.text(probabilityX, probabilityY, '品质概率', {
+        this.elements.probabilityTitle = this.scene.add.text(X, Y, '品质概率', {
             fontSize: '16px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif',
@@ -287,8 +300,8 @@ export class StatusUI {
         
         for (const [rarityKey, rarityData] of Object.entries(TOWER_RARITY)) {
             const probabilityText = this.scene.add.text(
-                probabilityX, 
-                probabilityY + 25 + index * 18,
+                X, 
+                Y + 25 + index * LINE_HEIGHT,
                 '',
                 {
                     fontSize: '13px',
@@ -315,9 +328,38 @@ export class StatusUI {
         this.elements.versionText.setOrigin(0, 0);
     }
 
+    // 获取缓存的游戏场景
+    getGameScene() {
+        if (!this.cachedGameScene) {
+            this.cachedGameScene = this.scene.scene.get('GameScene');
+        }
+        return this.cachedGameScene;
+    }
+
+    // 安全更新文本的通用方法
+    safeUpdateText(element, text, fallback = '') {
+        if (element && element.setText) {
+            try {
+                element.setText(text);
+                return true;
+            } catch (error) {
+                console.warn('文本更新失败:', error);
+                if (fallback) {
+                    try {
+                        element.setText(fallback);
+                    } catch (e) {
+                        console.error('fallback文本更新也失败:', e);
+                    }
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
     updateGold(amount, changeAmount = null) {
         if (this.elements.goldText) {
-            this.elements.goldText.setText(amount.toString());
+            this.safeUpdateText(this.elements.goldText, amount.toString());
             
             // 添加跳动动画效果
             this.scene.tweens.add({
@@ -339,7 +381,7 @@ export class StatusUI {
 
     updateHealth(amount, changeAmount = null) {
         if (this.elements.healthText) {
-            this.elements.healthText.setText(amount.toString());
+            this.safeUpdateText(this.elements.healthText, amount.toString());
             
             // 添加跳动动画效果
             this.scene.tweens.add({
@@ -358,79 +400,79 @@ export class StatusUI {
             }
             
             // 根据生命值改变边框和图标颜色
-            if (amount > 70) {
-                this.elements.healthBackground.setStrokeStyle(3, 0x44ff44, 1);
-                this.elements.healthIcon.setFillStyle(0x44ff44);
-                this.elements.healthIcon.setStrokeStyle(2, 0x00ff00);
-            } else if (amount > 30) {
-                this.elements.healthBackground.setStrokeStyle(3, 0xffaa00, 1);
-                this.elements.healthIcon.setFillStyle(0xffaa00);
-                this.elements.healthIcon.setStrokeStyle(2, 0xff8800);
-            } else {
-                this.elements.healthBackground.setStrokeStyle(3, 0xff4444, 1);
-                this.elements.healthIcon.setFillStyle(0xff4444);
-                this.elements.healthIcon.setStrokeStyle(2, 0xff0000);
-            }
+            this.updateHealthVisuals(amount);
         }
+    }
+
+    // 提取血量视觉更新逻辑
+    updateHealthVisuals(amount) {
+        if (!this.elements.healthBackground || !this.elements.healthIcon) return;
+        
+        let theme;
+        if (amount > 70) {
+            theme = COLOR_THEMES.HEALTH.HIGH;
+        } else if (amount > 30) {
+            theme = COLOR_THEMES.HEALTH.MEDIUM;
+        } else {
+            theme = COLOR_THEMES.HEALTH.LOW;
+        }
+        
+        this.elements.healthBackground.setStrokeStyle(3, theme.bg, 1);
+        this.elements.healthIcon.setFillStyle(theme.icon);
+        this.elements.healthIcon.setStrokeStyle(2, theme.stroke);
     }
 
     updateWave(wave) {
-        if (this.elements.waveText) {
-            this.elements.waveText.setText(`波次: ${wave}/20`);
-        }
+        this.safeUpdateText(this.elements.waveText, `波次: ${wave}/20`);
     }
 
     updateMapName(mapName) {
-        if (this.elements.mapNameText && this.elements.mapNameText.setText) {
-            try {
-                this.elements.mapNameText.setText(mapName);
-            } catch (error) {
-                console.warn('updateMapName失败:', error);
-            }
-        }
+        this.safeUpdateText(this.elements.mapNameText, mapName);
     }
 
     updateLevel(level, maxTowers) {
-        if (this.elements.levelText) {
-            this.elements.levelText.setText(`${level}级`);
-        }
+        this.safeUpdateText(this.elements.levelText, `${level}级`);
         
         // 更新塔位显示
-        const gameScene = this.scene.scene.get('GameScene');
+        const gameScene = this.getGameScene();
         const currentTowers = gameScene && gameScene.towers && gameScene.towers.children && gameScene.towers.children.entries 
             ? gameScene.towers.children.entries.length 
             : 0;
-        if (this.elements.towerLimitText) {
-            this.elements.towerLimitText.setText(`${currentTowers}/${maxTowers}`);
-        }
+            
+        this.safeUpdateText(this.elements.towerLimitText, `${currentTowers}/${maxTowers}`);
         
-        // 根据塔位使用情况改变颜色
-        if (this.elements.towerLimitBackground && this.elements.towerLimitIcon) {
-            const usage = currentTowers / maxTowers;
-            if (usage >= 1) {
-                this.elements.towerLimitBackground.setStrokeStyle(3, 0xff4444, 1);
-                this.elements.towerLimitIcon.setText('🔴');
-            } else if (usage >= 0.8) {
-                this.elements.towerLimitBackground.setStrokeStyle(3, 0xffaa00, 1);
-                this.elements.towerLimitIcon.setText('🟠');
-            } else {
-                this.elements.towerLimitBackground.setStrokeStyle(3, 0x4488ff, 1);
-                this.elements.towerLimitIcon.setText('🏰');
-            }
-        }
+        // 更新塔位视觉效果
+        this.updateTowerLimitVisuals(currentTowers, maxTowers);
         
         // 更新经验按钮显示
-        if (this.elements.upgradeText) {
-            this.elements.upgradeText.setText(`购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`);
-        }
+        this.safeUpdateText(this.elements.upgradeText, `购买经验(-${ECONOMY_CONFIG.EXP_BUTTON_COST})`);
         
         // 更新品质概率显示
         this.updateRarityProbabilities();
     }
 
+    // 提取塔位视觉更新逻辑
+    updateTowerLimitVisuals(currentTowers, maxTowers) {
+        if (!this.elements.towerLimitBackground || !this.elements.towerLimitIcon) return;
+        
+        const usage = currentTowers / maxTowers;
+        let theme;
+        
+        if (usage >= 1) {
+            theme = COLOR_THEMES.TOWER_LIMIT.FULL;
+        } else if (usage >= 0.8) {
+            theme = COLOR_THEMES.TOWER_LIMIT.HIGH;
+        } else {
+            theme = COLOR_THEMES.TOWER_LIMIT.NORMAL;
+        }
+        
+        this.elements.towerLimitBackground.setStrokeStyle(3, theme.bg, 1);
+        this.safeUpdateText(this.elements.towerLimitIcon, theme.icon);
+    }
+
     // 更新品质概率显示
     updateRarityProbabilities() {
-        const gameScene = this.scene.scene.get('GameScene');
+        const gameScene = this.getGameScene();
         if (!gameScene || !gameScene.gameState) return;
         
         // 检查probabilityList是否存在
@@ -460,14 +502,14 @@ export class StatusUI {
             if (probability !== undefined && probability > 0) {
                 // 显示可用的品质
                 const percentage = (probability * 100).toFixed(1);
-                probabilityText.setText(`${rarityData.name}: ${percentage}%`);
+                this.safeUpdateText(probabilityText, `${rarityData.name}: ${percentage}%`);
                 probabilityText.setAlpha(1.0);
                 probabilityText.setVisible(true);
             } else {
                 // 显示未解锁的品质
                 const unlockLevel = this.getRarityUnlockLevel(rarityKey);
                 if (unlockLevel > playerLevel) {
-                    probabilityText.setText(`${rarityData.name}: ${unlockLevel}级解锁`);
+                    this.safeUpdateText(probabilityText, `${rarityData.name}: ${unlockLevel}级解锁`);
                     probabilityText.setAlpha(0.5);
                     probabilityText.setVisible(true);
                 } else {
@@ -491,22 +533,16 @@ export class StatusUI {
 
     updateExperience(currentExp, expRequiredForNext) {
         // 更新经验数值显示
-        if (this.elements.experienceValueText && this.elements.experienceValueText.setText) {
-            try {
-                this.elements.experienceValueText.setText(`${currentExp}/${expRequiredForNext}`);
-            } catch (error) {
-                console.warn('updateExperience文本更新失败:', error);
-            }
-        }
+        this.safeUpdateText(this.elements.experienceValueText, `${currentExp}/${expRequiredForNext}`);
         
         // 更新经验进度条
         if (this.elements.expBarForeground && this.elements.expBarForeground.setSize && expRequiredForNext > 0) {
             try {
                 const progress = currentExp / expRequiredForNext;
-                const maxWidth = 120;
+                const maxWidth = UI_LAYOUT.LEVEL_SECTION.EXP_BAR_WIDTH;
                 const currentWidth = maxWidth * progress;
                 
-                this.elements.expBarForeground.setSize(currentWidth, 8);
+                this.elements.expBarForeground.setSize(currentWidth, UI_LAYOUT.LEVEL_SECTION.EXP_BAR_HEIGHT);
                 
                 // 根据进度改变颜色
                 if (progress >= 0.8) {
@@ -531,9 +567,9 @@ export class StatusUI {
             
             const info = `${tower.name} (${this.scene.TOWER_RARITY[rarity].name})\n` +
                         `伤害: ${damage} | 射程: ${range} | 攻速: ${attackSpeed.toFixed(1)}`;
-            this.elements.selectedTowerInfo.setText(info);
+            this.safeUpdateText(this.elements.selectedTowerInfo, info);
         } else {
-            this.elements.selectedTowerInfo.setText('选择一个塔查看详情');
+            this.safeUpdateText(this.elements.selectedTowerInfo, '选择一个塔查看详情');
         }
     }
 
@@ -545,16 +581,16 @@ export class StatusUI {
         
         const info = `已选中: ${tower.towerData.name} (${this.scene.TOWER_RARITY[rarity].name})\n` +
                     `伤害: ${damage} | 射程: ${range} | 攻速: ${attackSpeed.toFixed(1)}`;
-        this.elements.selectedTowerInfo.setText(info);
+        this.safeUpdateText(this.elements.selectedTowerInfo, info);
     }
 
     clearSelectedTowerInfo() {
-        this.elements.selectedTowerInfo.setText('');
+        this.safeUpdateText(this.elements.selectedTowerInfo, '');
     }
 
     // 显示变化数值
     showChangeNumber(targetElement, changeAmount, color) {
-        if (!targetElement) return;
+        if (!targetElement || !this.scene || !this.scene.add) return;
         
         // 计算显示位置：右上偏左一点
         const offsetX = 25;
@@ -562,16 +598,23 @@ export class StatusUI {
         const displayX = targetElement.x + offsetX;
         const displayY = targetElement.y + offsetY;
         
-        // 创建变化数值文本
-        const changeText = this.scene.add.text(displayX, displayY, 
-            (changeAmount > 0 ? '+' : '') + changeAmount.toString(), {
-            fontSize: '16px',
-            fill: color,
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
-        });
+        // 直接创建文本对象，避免对象池在游戏重新开始时的问题
+        const changeText = this.scene.add.text(
+            displayX, 
+            displayY, 
+            (changeAmount > 0 ? '+' : '') + changeAmount.toString(),
+            {
+                fontSize: '16px',
+                fill: color,
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 2
+            }
+        );
+        
+        if (!changeText) return;
+        
         changeText.setOrigin(0.5);
         
         // 添加上浮和渐隐动画
@@ -582,7 +625,10 @@ export class StatusUI {
             duration: 1000,
             ease: 'Power2',
             onComplete: () => {
-                changeText.destroy();
+                // 直接销毁文本对象
+                if (changeText && changeText.destroy) {
+                    changeText.destroy();
+                }
             }
         });
         
