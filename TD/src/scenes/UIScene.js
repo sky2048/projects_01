@@ -5,6 +5,7 @@ import { SynergyUI } from '../ui/SynergyUI.js';
 import { EquipmentUI } from '../ui/EquipmentUI.js';
 import { NotificationUI } from '../ui/NotificationUI.js';
 import { TooltipUI } from '../ui/TooltipUI.js';
+import { RoguelikeUI } from '../ui/RoguelikeUI.js';
 
 export class UIScene extends Phaser.Scene {
     constructor() {
@@ -17,6 +18,7 @@ export class UIScene extends Phaser.Scene {
         this.equipmentUI = null;
         this.notificationUI = null;
         this.tooltipUI = null;
+        this.roguelikeUI = null;
         
         // GM面板状态
         this.gmPanelVisible = false;
@@ -42,6 +44,7 @@ export class UIScene extends Phaser.Scene {
         this.equipmentUI = new EquipmentUI(this);
         this.notificationUI = new NotificationUI(this);
         this.tooltipUI = new TooltipUI(this);
+        this.roguelikeUI = new RoguelikeUI(this);
         
         // 创建各个UI模块
         this.statusUI.create();
@@ -199,9 +202,9 @@ export class UIScene extends Phaser.Scene {
         }
     }
 
-    updateWave(wave) {
+    updateWave(wave, phase = null, waveInfo = null) {
         if (this.statusUI) {
-            this.statusUI.updateWave(wave);
+            this.statusUI.updateWave(wave, phase, waveInfo);
         }
     }
 
@@ -288,9 +291,22 @@ export class UIScene extends Phaser.Scene {
         }
     }
 
-    showWaveNotification(wave, isStart = true) {
+    showWaveNotification(wave, isStart = true, customText = null) {
         if (this.notificationUI) {
-            this.notificationUI.showWaveNotification(wave, isStart);
+            this.notificationUI.showWaveNotification(wave, isStart, customText);
+        }
+    }
+
+    // 肉鸽三选一相关方法
+    showRoguelikeSelection(options, callback) {
+        if (this.roguelikeUI) {
+            this.roguelikeUI.show(options, callback);
+        }
+    }
+
+    hideRoguelikeSelection() {
+        if (this.roguelikeUI) {
+            this.roguelikeUI.hide();
         }
     }
 
@@ -356,6 +372,7 @@ export class UIScene extends Phaser.Scene {
 
         this.gmButton.setInteractive();
         this.gmButton.on('pointerdown', () => {
+            console.log('GM按钮点击');
             this.toggleGMPanel();
         });
 
@@ -420,31 +437,55 @@ export class UIScene extends Phaser.Scene {
 
     togglePause() {
         const gameScene = this.scene.get('GameScene');
+        if (!gameScene) return;
+        
         gameScene.gameState.isPaused = !gameScene.gameState.isPaused;
         
         if (gameScene.gameState.isPaused) {
             this.pauseText.setText('继续');
-            gameScene.scene.pause();
+            // 暂停时保存当前的时间缩放
+            this.savedTimeScale = gameScene.physics.world.timeScale || 1;
+            this.savedTweenScale = gameScene.tweens.timeScale || 1;
+            this.savedGameTimeScale = gameScene.time.timeScale || 1;
+            
+            // 设置时间缩放为0，完全暂停
+            gameScene.physics.world.timeScale = 0;
+            gameScene.tweens.timeScale = 0;
+            gameScene.time.timeScale = 0;
         } else {
             this.pauseText.setText('暂停');
-            gameScene.scene.resume();
+            // 恢复之前保存的时间缩放
+            gameScene.physics.world.timeScale = this.savedTimeScale || 1;
+            gameScene.tweens.timeScale = this.savedTweenScale || 1;
+            gameScene.time.timeScale = this.savedGameTimeScale || 1;
         }
+        
+        console.log(`游戏${gameScene.gameState.isPaused ? '已暂停' : '已恢复'}`);
     }
 
     toggleSpeed() {
         const gameScene = this.scene.get('GameScene');
-        
-        if (gameScene.physics.world.timeScale === 1) {
-            gameScene.physics.world.timeScale = 2;
-            gameScene.tweens.timeScale = 2;
-            gameScene.time.timeScale = 2;
-            this.speedText.setText('正常');
-        } else {
-            gameScene.physics.world.timeScale = 1;
-            gameScene.tweens.timeScale = 1;
-            gameScene.time.timeScale = 1;
-            this.speedText.setText('加速');
+        if (!gameScene) return;
+
+        // 如果游戏暂停，不允许切换速度
+        if (gameScene.gameState.isPaused) {
+            this.showNotification('游戏暂停时无法切换速度', 'warning', 1500);
+            return;
         }
+
+        // 多档速度循环
+        const speedLevels = [1, 2, 3, 5, 10];
+        let current = speedLevels.indexOf(gameScene.physics.world.timeScale);
+        if (current === -1) current = 0;
+        let next = (current + 1) % speedLevels.length;
+        const newSpeed = speedLevels[next];
+
+        gameScene.physics.world.timeScale = newSpeed;
+        gameScene.tweens.timeScale = newSpeed;
+        gameScene.time.timeScale = newSpeed;
+        this.speedText.setText(`${newSpeed}x`);
+
+        console.log(`游戏速度切换为: ${newSpeed}x`);
     }
 
     toggleGMPanel() {
@@ -456,140 +497,104 @@ export class UIScene extends Phaser.Scene {
     }
 
     showGMPanel() {
-        if (this.gmPanelVisible) return;
-        
+        console.log('showGMPanel called');
+        if (this.gmPanelVisible) {
+            console.log('gmPanelVisible is true, return');
+            return;
+        }
         this.gmPanelVisible = true;
-        
-        // 半透明背景
-        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.5);
-        this.gmPanelElements.push(overlay);
-        
-        // GM面板背景
-        const panelBg = this.add.rectangle(640, 360, 500, 400, 0x2c2c54);
-        panelBg.setStrokeStyle(3, 0x8b5cf6);
+
+        // 更小的弹窗尺寸和更靠右的位置
+        const panelWidth = 260;
+        const panelHeight = 340;
+        const panelX = 1280 - panelWidth / 2 - 10; // 右侧只留10px边距
+        const panelY = 100 + panelHeight / 2;      // 稍微上移
+
+        // 主面板
+        const panelBg = this.add.rectangle(panelX, panelY, panelWidth, panelHeight, 0x2c2c54, 0.98)
+            .setStrokeStyle(3, 0x8b5cf6)
+            .setDepth(5001)
+            .setOrigin(0.5)
+            .setAlpha(0.98);
+        panelBg.setInteractive();
         this.gmPanelElements.push(panelBg);
-        
+
         // 标题
-        const title = this.add.text(640, 200, 'GM工具面板', {
-            fontSize: '24px',
+        const title = this.add.text(panelX, panelY - panelHeight / 2 + 30, 'GM工具面板', {
+            fontSize: '18px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
-        });
-        title.setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(5002);
         this.gmPanelElements.push(title);
-        
+
         // 副标题
-        const subtitle = this.add.text(640, 230, '调试和测试功能', {
-            fontSize: '16px',
+        const subtitle = this.add.text(panelX, panelY - panelHeight / 2 + 54, '调试和测试功能', {
+            fontSize: '12px',
             fill: '#cccccc',
             fontFamily: 'Arial, sans-serif'
-        });
-        subtitle.setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(5002);
         this.gmPanelElements.push(subtitle);
-        
-        // 创建GM功能按钮
-        this.createGMButtons();
-        
-        // 关闭按钮
-        const closeButton = this.add.rectangle(800, 180, 60, 30, 0xff4444);
-        const closeText = this.add.text(800, 180, '关闭', {
-            fontSize: '14px',
+
+        // 关闭按钮（右上角）
+        const closeBtnX = panelX + panelWidth / 2 - 20;
+        const closeBtnY = panelY - panelHeight / 2 + 20;
+        const closeButton = this.add.rectangle(closeBtnX, closeBtnY, 28, 22, 0xff4444)
+            .setDepth(5003)
+            .setInteractive();
+        const closeText = this.add.text(closeBtnX, closeBtnY, '关', {
+            fontSize: '12px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
-        });
-        closeText.setOrigin(0.5);
-        
-        closeButton.setInteractive();
-        closeButton.on('pointerdown', () => {
-            this.hideGMPanel();
-        });
-        
-        closeButton.on('pointerover', () => {
-            closeButton.setFillStyle(0xff6666);
-        });
-        
-        closeButton.on('pointerout', () => {
-            closeButton.setFillStyle(0xff4444);
-        });
-        
+        }).setOrigin(0.5).setDepth(5004);
+        closeButton.on('pointerdown', () => this.hideGMPanel());
+        closeButton.on('pointerover', () => closeButton.setFillStyle(0xff6666));
+        closeButton.on('pointerout', () => closeButton.setFillStyle(0xff4444));
         this.gmPanelElements.push(closeButton, closeText);
-        
-        // 点击背景关闭
-        overlay.setInteractive();
-        overlay.on('pointerdown', () => {
-            this.hideGMPanel();
-        });
+
+        // GM功能按钮（竖排，居中）
+        this.createGMButtons(panelX, panelY, panelHeight);
     }
 
-    createGMButtons() {
-        const buttonWidth = 200;
-        const buttonHeight = 40;
-        const buttonSpacing = 50;
-        const startY = 280;
-        
-        // GM功能按钮配置
+    // 修改createGMButtons，支持自定义高度
+    createGMButtons(panelX, panelY, panelHeight = 340) {
+        const buttonWidth = 150;
+        const buttonHeight = 32;
+        const buttonSpacing = 38;
+        const startY = panelY - panelHeight / 2 + 90;
+
         const gmButtons = [
-            {
-                text: '增加1000金币',
-                color: 0xffd700,
-                action: () => this.gmAddGold(1000)
-            },
-            {
-                text: '回复满血',
-                color: 0xff4444,
-                action: () => this.gmRestoreHealth()
-            },
-            {
-                text: '增加经验',
-                color: 0x00ff88,
-                action: () => this.gmAddExperience(50)
-            },
-            {
-                text: '跳过当前波次',
-                color: 0x4a90e2,
-                action: () => this.gmSkipWave()
-            },
-            {
-                text: '清空所有怪物',
-                color: 0xff6b6b,
-                action: () => this.gmClearMonsters()
-            }
+            { text: '增加1000金币', color: 0xffd700, action: () => this.gmAddGold(1000) },
+            { text: '回复满血', color: 0xff4444, action: () => this.gmRestoreHealth() },
+            { text: '增加经验', color: 0x00ff88, action: () => this.gmAddExperience(50) },
+            { text: '跳过当前波次', color: 0x4a90e2, action: () => this.gmSkipWave() },
+            { text: '清空所有怪物', color: 0xff6b6b, action: () => this.gmClearMonsters() }
         ];
-        
+
         gmButtons.forEach((buttonConfig, index) => {
             const y = startY + index * buttonSpacing;
-            
-            // 按钮背景
-            const button = this.add.rectangle(640, y, buttonWidth, buttonHeight, buttonConfig.color);
-            button.setStrokeStyle(2, 0xffffff, 0.5);
-            
-            // 按钮文字
-            const buttonText = this.add.text(640, y, buttonConfig.text, {
-                fontSize: '16px',
+            const button = this.add.rectangle(panelX, y, buttonWidth, buttonHeight, buttonConfig.color)
+                .setStrokeStyle(2, 0xffffff, 0.5)
+                .setDepth(5003)
+                .setInteractive();
+            const buttonText = this.add.text(panelX, y, buttonConfig.text, {
+                fontSize: '13px',
                 fill: '#ffffff',
                 fontFamily: 'Arial, sans-serif',
                 fontStyle: 'bold'
-            });
-            buttonText.setOrigin(0.5);
-            
-            // 按钮交互
-            button.setInteractive();
+            }).setOrigin(0.5).setDepth(5004);
             button.on('pointerdown', () => {
                 buttonConfig.action();
                 this.showNotification(`执行: ${buttonConfig.text}`, 'success', 1500);
             });
-            
             button.on('pointerover', () => {
                 button.setFillStyle(buttonConfig.color, 0.8);
                 button.setScale(1.05);
             });
-            
             button.on('pointerout', () => {
                 button.setFillStyle(buttonConfig.color, 1);
                 button.setScale(1);
             });
-            
             this.gmPanelElements.push(button, buttonText);
         });
     }
@@ -681,10 +686,12 @@ export class UIScene extends Phaser.Scene {
     showConfirmDialog(title, message, onConfirm, onCancel) {
         // 半透明黑色背景
         this.confirmOverlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.5);
+        this.confirmOverlay.setDepth(8000); // 低于肉鸽UI但高于其他元素
         
         // 对话框背景
         this.confirmDialog = this.add.rectangle(640, 360, 400, 200, 0x2c2c54);
         this.confirmDialog.setStrokeStyle(2, 0x4a90e2);
+        this.confirmDialog.setDepth(8001);
         
         // 标题文本
         const titleText = this.add.text(640, 300, title, {
@@ -694,6 +701,7 @@ export class UIScene extends Phaser.Scene {
             fontStyle: 'bold'
         });
         titleText.setOrigin(0.5);
+        titleText.setDepth(8002);
         
         // 消息文本
         const messageText = this.add.text(640, 340, message, {
@@ -703,24 +711,29 @@ export class UIScene extends Phaser.Scene {
             align: 'center'
         });
         messageText.setOrigin(0.5);
+        messageText.setDepth(8002);
         
         // 确认按钮
         const confirmButton = this.add.rectangle(580, 400, 80, 35, 0xff4444);
+        confirmButton.setDepth(8003);
         const confirmText = this.add.text(580, 400, '确定', {
             fontSize: '16px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
         confirmText.setOrigin(0.5);
+        confirmText.setDepth(8004);
         
         // 取消按钮
         const cancelButton = this.add.rectangle(700, 400, 80, 35, 0x6c757d);
+        cancelButton.setDepth(8003);
         const cancelText = this.add.text(700, 400, '取消', {
             fontSize: '16px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif'
         });
         cancelText.setOrigin(0.5);
+        cancelText.setDepth(8004);
         
         // 按钮交互
         confirmButton.setInteractive();

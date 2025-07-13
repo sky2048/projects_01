@@ -27,11 +27,16 @@ export class TowerShop {
         // 保存被锁定槽位的塔
         const lockedTowers = [];
         for (let i = 0; i < this.shopSlots; i++) {
-            if (this.lockedSlots[i]) {
+            if (this.lockedSlots[i] && this.currentOffers[i]) {
                 lockedTowers[i] = this.currentOffers[i];
             } else {
                 lockedTowers[i] = null;
             }
+        }
+        
+        // 安全检查：确保currentOffers数组存在
+        if (!this.currentOffers) {
+            this.currentOffers = [];
         }
         
         this.currentOffers = [];
@@ -47,7 +52,12 @@ export class TowerShop {
             } else {
                 // 生成新塔
                 const tower = this.generateRandomTower();
-                this.currentOffers.push(tower);
+                if (tower) {
+                    this.currentOffers.push(tower);
+                } else {
+                    console.warn(`生成塔失败，槽位 ${i}`);
+                    this.currentOffers.push(null);
+                }
             }
         }
         
@@ -64,12 +74,30 @@ export class TowerShop {
     }
 
     generateRandomTower() {
+        // 安全检查：确保塔类型配置存在
+        if (!TOWER_TYPES || Object.keys(TOWER_TYPES).length === 0) {
+            console.error('塔类型配置不存在');
+            return null;
+        }
+        
         const towerTypes = Object.keys(TOWER_TYPES);
         const randomType = towerTypes[Math.floor(Math.random() * towerTypes.length)];
         const towerTemplate = TOWER_TYPES[randomType];
         
+        // 安全检查：确保塔模板存在
+        if (!towerTemplate || !towerTemplate.baseStats) {
+            console.error(`塔模板不存在或缺少基础属性: ${randomType}`);
+            return null;
+        }
+        
         const rarity = this.selectRandomRarity();
         const rarityMultiplier = this.getRarityMultiplier(rarity);
+        
+        // 安全检查：确保稀有度倍数有效
+        if (isNaN(rarityMultiplier) || rarityMultiplier <= 0) {
+            console.error(`无效的稀有度倍数: ${rarityMultiplier}`);
+            return null;
+        }
         
         const tower = {
             id: this.generateId(),

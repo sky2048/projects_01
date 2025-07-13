@@ -240,16 +240,37 @@ export class SynergyUI {
     }
 
     updateSynergies(towers) {
+        // 安全检查：确保towers数组有效
+        if (!Array.isArray(towers) || towers.length === 0) {
+            // 清空显示
+            this.synergyDisplayData.clear();
+            this.synergyHexagons.forEach(hexagon => {
+                this.setSynergyHexagonVisibility(hexagon, false);
+            });
+            return;
+        }
+        
         // 统计羁绊
         const synergyCount = {};
         
-        towers.forEach(tower => {
+        towers.forEach((tower, index) => {
+            // 安全检查：确保塔数据有效
+            if (!tower || !tower.synergy) {
+                console.warn(`塔[${index}]数据无效或缺少羁绊信息`, tower);
+                return;
+            }
+            
             const synergy = tower.synergy;
             synergyCount[synergy] = (synergyCount[synergy] || 0) + 1;
             
             // 处理装备附加的羁绊
-            if (tower.additionalSynergies && tower.additionalSynergies.length > 0) {
-                tower.additionalSynergies.forEach(additionalSynergy => {
+            if (tower.additionalSynergies && Array.isArray(tower.additionalSynergies) && tower.additionalSynergies.length > 0) {
+                tower.additionalSynergies.forEach((additionalSynergy, synergyIndex) => {
+                    // 安全检查：确保附加羁绊有效
+                    if (!additionalSynergy || typeof additionalSynergy !== 'string') {
+                        console.warn(`塔[${index}]的附加羁绊[${synergyIndex}]无效`, additionalSynergy);
+                        return;
+                    }
                     synergyCount[additionalSynergy] = (synergyCount[additionalSynergy] || 0) + 1;
                 });
             }
@@ -264,13 +285,32 @@ export class SynergyUI {
             const count = synergyCount[synergyKey] || 0;
             const synergy = SYNERGIES[synergyKey];
             
-            if (count >= 1 && synergy) {
+            // 安全检查：确保羁绊配置存在
+            if (!synergy) {
+                console.warn(`羁绊配置不存在: ${synergyKey}`);
+                return;
+            }
+            
+            // 安全检查：确保羁绊等级配置存在
+            if (!synergy.levels || !Array.isArray(synergy.levels) || synergy.levels.length === 0) {
+                console.warn(`羁绊等级配置无效: ${synergyKey}`, synergy);
+                return;
+            }
+            
+            if (count >= 1) {
                 // 找到激活的羁绊等级
                 let activeLevel = null;
                 let activeLevelIndex = -1;
                 for (let i = synergy.levels.length - 1; i >= 0; i--) {
-                    if (count >= synergy.levels[i].count) {
-                        activeLevel = synergy.levels[i];
+                    const level = synergy.levels[i];
+                    // 安全检查：确保等级配置有效
+                    if (!level || typeof level.count !== 'number') {
+                        console.warn(`羁绊等级[${i}]配置无效: ${synergyKey}`, level);
+                        continue;
+                    }
+                    
+                    if (count >= level.count) {
+                        activeLevel = level;
                         activeLevelIndex = i;
                         break;
                     }
@@ -278,6 +318,12 @@ export class SynergyUI {
                 
                 // 修复：只有当真正找到激活等级时才认为是激活状态
                 const isActivated = activeLevel !== null;
+                
+                // 安全检查：确保羁绊显示配置存在
+                if (!this.synergyConfig[synergyKey]) {
+                    console.warn(`羁绊显示配置不存在: ${synergyKey}`);
+                    return;
+                }
                 
                 synergyDataList.push({
                     synergyKey: synergyKey,

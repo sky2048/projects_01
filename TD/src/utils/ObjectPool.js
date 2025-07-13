@@ -49,27 +49,52 @@ export class ObjectPool {
         const pool = this.pools.get(type);
         if (!pool) {
             console.warn(`Pool not found for type: ${type}`);
-            return;
+            return false;
         }
 
-        if (pool.inUse.has(obj)) {
-            pool.inUse.delete(obj);
+        if (!pool.inUse.has(obj)) {
+            console.warn(`Object not in use, cannot release to pool: ${type}`);
+            return false;
+        }
+
+        pool.inUse.delete(obj);
+        
+        // 如果池未满，返回池中；否则销毁对象
+        if (pool.available.length < pool.maxSize) {
+            pool.available.push(obj);
             
-            // 如果池未满，返回池中；否则销毁对象
-            if (pool.available.length < pool.maxSize) {
-                pool.available.push(obj);
-                
-                // 隐藏对象但不销毁
+            // 隐藏对象但不销毁
+            try {
                 if (obj.setVisible) obj.setVisible(false);
                 if (obj.setActive) obj.setActive(false);
-            } else {
-                // 池已满，销毁对象
-                if (obj.realDestroy) {
-                    obj.realDestroy();
-                } else if (obj.destroy) {
-                    obj.destroy();
+                // 重置物理体速度（如果存在）
+                if (obj.body && obj.body.setVelocity) {
+                    obj.body.setVelocity(0, 0);
                 }
+            } catch (error) {
+                console.warn('对象池重置对象状态失败:', error);
+                // 如果重置失败，直接销毁对象
+                this.destroyObject(obj);
+                return false;
             }
+        } else {
+            // 池已满，销毁对象
+            this.destroyObject(obj);
+        }
+        
+        return true;
+    }
+
+    // 安全销毁对象的辅助方法
+    destroyObject(obj) {
+        try {
+            if (obj.realDestroy) {
+                obj.realDestroy();
+            } else if (obj.destroy) {
+                obj.destroy();
+            }
+        } catch (error) {
+            console.warn('销毁对象时出错:', error);
         }
     }
 
@@ -79,7 +104,7 @@ export class ObjectPool {
         if (pool) {
             // 销毁所有对象
             [...pool.available, ...pool.inUse].forEach(obj => {
-                if (obj.destroy) obj.destroy();
+                this.destroyObject(obj);
             });
             
             pool.available = [];
@@ -99,23 +124,46 @@ export class ObjectPool {
     getStats(type = null) {
         if (type) {
             const pool = this.pools.get(type);
-            return pool ? {
-                type: type,
-                available: pool.available.length,
-                inUse: pool.inUse.size,
-                total: pool.available.length + pool.inUse.size
-            } : null;
+            if (pool) {
+                return {
+                    type: type,
+                    available: pool.available.length,
+                    inUse: pool.inUse.size,
+                    maxSize: pool.maxSize,
+                    total: pool.available.length + pool.inUse.size
+                };
+            }
+            return null;
         }
-
+        
+        // 返回所有池的统计信息
         const stats = {};
-        for (const [type, pool] of this.pools) {
-            stats[type] = {
+        for (const [poolType, pool] of this.pools) {
+            stats[poolType] = {
                 available: pool.available.length,
                 inUse: pool.inUse.size,
+                maxSize: pool.maxSize,
                 total: pool.available.length + pool.inUse.size
             };
         }
         return stats;
+    }
+
+    // 强制垃圾回收（在适当的时候调用）
+    forceGarbageCollection() {
+        // 清理可能的内存泄漏
+        for (const [type, pool] of this.pools) {
+            // 检查是否有"死"对象需要清理
+            const deadObjects = [...pool.inUse].filter(obj => 
+                !obj.active || !obj.scene || obj.scene.scene.isDestroyed()
+            );
+            
+            deadObjects.forEach(obj => {
+                console.warn(`清理死对象: ${type}`);
+                pool.inUse.delete(obj);
+                this.destroyObject(obj);
+            });
+        }
     }
 }
 

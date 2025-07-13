@@ -163,16 +163,56 @@ export class GameScene extends Phaser.Scene {
             console.log(`随机选择地图: ${this.currentMap.name} - ${this.currentMap.description}`);
         }
         
+        // 安全检查：确保地图和路径点存在
+        if (!this.currentMap || !this.currentMap.pathPoints || !Array.isArray(this.currentMap.pathPoints)) {
+            console.error('地图配置无效或缺少路径点');
+            // 使用默认直线路径作为降级方案
+            this.currentMap = MAP_CONFIG.MAPS.STRAIGHT;
+        }
+        
         // 从地图配置中获取路径点
         const mapPathPoints = this.currentMap.pathPoints;
+        
+        // 安全检查：确保路径点至少有起点和终点
+        if (mapPathPoints.length < 2) {
+            console.error('路径点数量不足，至少需要起点和终点');
+            return;
+        }
         
         // 设置起点和终点
         this.pathStart = mapPathPoints[0];
         this.pathEnd = mapPathPoints[mapPathPoints.length - 1];
         
+        // 验证起点和终点的坐标
+        if (!this.pathStart || !this.pathEnd || 
+            this.pathStart.x === undefined || this.pathStart.y === undefined ||
+            this.pathEnd.x === undefined || this.pathEnd.y === undefined) {
+            console.error('起点或终点坐标无效');
+            return;
+        }
+        
         // 创建路径点
         this.pathPoints = [];
         mapPathPoints.forEach((point, index) => {
+            // 安全检查：确保路径点有效
+            if (!point || point.x === undefined || point.y === undefined) {
+                console.warn(`路径点[${index}]无效:`, point);
+                return;
+            }
+            
+            // 边界检查：确保路径点在棋盘范围内
+            if (point.x < 0 || point.x >= this.boardWidth || 
+                point.y < 0 || point.y >= this.boardHeight) {
+                console.warn(`路径点[${index}]超出棋盘边界:`, point);
+                return;
+            }
+            
+            // 安全检查：确保对应的棋盘格存在
+            if (!this.board[point.y] || !this.board[point.y][point.x]) {
+                console.warn(`路径点[${index}]对应的棋盘格不存在:`, point);
+                return;
+            }
+            
             const pathTile = this.board[point.y][point.x];
             pathTile.isPath = true;
             
@@ -193,6 +233,12 @@ export class GameScene extends Phaser.Scene {
                 y: pathTile.worldY
             });
         });
+        
+        // 最终验证：确保路径点数量足够
+        if (this.pathPoints.length < 2) {
+            console.error('有效路径点数量不足');
+            return;
+        }
         
         // 初始化路径查找器
         this.pathFinder = new PathFinder(this.board, this.pathStart, this.pathEnd);
@@ -414,6 +460,14 @@ export class GameScene extends Phaser.Scene {
             const tower = new Tower(this, tile.worldX, tile.worldY, towerData);
             console.log('塔创建成功:', tower);
             
+            // 应用当前已有的永久buff
+            if (this.waveManager && this.waveManager.getPermanentBuffs) {
+                const permanentBuffs = this.waveManager.getPermanentBuffs();
+                permanentBuffs.forEach(buff => {
+                    this.waveManager.applyBuffToTower(tower, buff);
+                });
+            }
+            
             this.towers.add(tower);
             tile.tower = tower;
             console.log('塔已添加到游戏中');
@@ -468,18 +522,18 @@ export class GameScene extends Phaser.Scene {
             leveledUp = true;
         }
         
-        // 通知UI更新
+        // 统一更新UI，避免多个延迟调用
         const uiScene = this.scene.get('UIScene');
-        if (uiScene && uiScene.updateExperience) {
-            // 延迟更新经验显示，避免渲染问题
-            this.time.delayedCall(100, () => {
+        if (uiScene) {
+            // 使用单个延迟调用来更新所有相关UI
+            this.time.delayedCall(50, () => {
                 if (uiScene && uiScene.updateExperience) {
                     uiScene.updateExperience(this.gameState.experience, this.getExpRequiredForNextLevel());
                 }
+                if (leveledUp && uiScene.updateLevel) {
+                    uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
+                }
             });
-        }
-        if (leveledUp && uiScene && uiScene.updateLevel) {
-            uiScene.updateLevel(this.gameState.level, this.gameState.maxTowers);
         }
         
         return leveledUp;
@@ -800,19 +854,56 @@ export class GameScene extends Phaser.Scene {
     }
 
     shouldProcessCollision(projectile, monster) {
+        // 基础安全检查：确保对象存在且有效
+        if (!projectile || !monster) {
+            return false;
+        }
+        
+        // 检查对象是否处于活动状态
+        if (!projectile.active || !monster.active) {
+            return false;
+        }
+        
+        // 检查对象是否有有效的位置
+        if (projectile.x === undefined || projectile.y === undefined ||
+            monster.x === undefined || monster.y === undefined) {
+            return false;
+        }
+        
         // 对于穿透投射物，检查是否已经击中过这个怪物
         if (projectile.piercing && projectile.hitTargets && projectile.hitTargets.has(monster)) {
             return false; // 已经击中过，不再处理碰撞
         }
         
-        // 检查目标是否有效
-        return monster.active && projectile.active;
+        // 检查投射物是否有目标（避免无目标投射物造成意外碰撞）
+        if (projectile.target && projectile.target !== monster) {
+            // 如果投射物有特定目标，但当前碰撞的不是目标，则跳过
+            // 除非是溅射类型的投射物
+            if (!projectile.splashDamage || projectile.splashDamage <= 0) {
+                return false;
+            }
+        }
+        
+        return true;
     }
 
     onProjectileHitMonster(projectile, monster) {
+        // 安全检查：确保投射物和怪物都有效
+        if (!projectile || !monster || !projectile.active || !monster.active) {
+            return;
+        }
+        
+        // 安全检查：确保投射物有hit方法
+        if (typeof projectile.hit !== 'function') {
+            console.warn('投射物缺少hit方法', projectile);
+            return;
+        }
+        
         // 直接调用投射物的hit方法，让投射物自己处理击中逻辑
-        if (projectile.hit) {
+        try {
             projectile.hit();
+        } catch (error) {
+            console.error('投射物hit方法执行失败:', error);
         }
     }
 
@@ -1100,9 +1191,21 @@ export class GameScene extends Phaser.Scene {
         const keepTower = towers[0];
         const removeTowers = towers.slice(1);
         
+        // 安全检查：确保保留的塔有有效坐标
+        if (!keepTower || keepTower.x === undefined || keepTower.y === undefined) {
+            console.error('合成时保留塔的坐标无效:', keepTower);
+            return;
+        }
+        
         // 找到保留塔的网格位置
         const boardX = Math.floor((keepTower.x - this.boardOffsetX) / this.tileSize);
         const boardY = Math.floor((keepTower.y - this.boardOffsetY) / this.tileSize);
+        
+        // 验证网格位置的有效性
+        if (boardX < 0 || boardX >= this.boardWidth || boardY < 0 || boardY >= this.boardHeight) {
+            console.error('合成时保留塔的网格位置超出边界:', { boardX, boardY, keepTower: { x: keepTower.x, y: keepTower.y } });
+            return;
+        }
         
         // 收集所有将被删除塔的装备
         const allEquipments = [];
@@ -1114,6 +1217,12 @@ export class GameScene extends Phaser.Scene {
         
         // 删除其他塔
         removeTowers.forEach(tower => {
+            // 安全检查：确保要删除的塔有有效坐标
+            if (!tower || tower.x === undefined || tower.y === undefined) {
+                console.warn('合成时要删除的塔坐标无效:', tower);
+                return;
+            }
+            
             const towerBoardX = Math.floor((tower.x - this.boardOffsetX) / this.tileSize);
             const towerBoardY = Math.floor((tower.y - this.boardOffsetY) / this.tileSize);
             
@@ -1139,26 +1248,16 @@ export class GameScene extends Phaser.Scene {
         // 升级保留的塔
         keepTower.upgrade(combinedTowerData);
         
-        // 关键修复：同步更新棋盘格中的塔引用
-        if (boardX >= 0 && boardX < this.boardWidth && 
-            boardY >= 0 && boardY < this.boardHeight) {
-            this.board[boardY][boardX].tower = keepTower;
-        }
-        
         // 显示合成特效
         this.showCombinationEffect(keepTower.x, keepTower.y);
         
-        // 通知UI
-        const uiScene = this.scene.get('UIScene');
-        if (uiScene && uiScene.showNotification) {
-            const rarityName = TOWER_RARITY[combinedTowerData.rarity].name;
-            uiScene.showNotification(`合成成功！获得 ${combinedTowerData.name} (${rarityName})`, 'success', 3000, 'center');
-        }
+        // 更新羁绊显示
+        this.updateSynergies();
         
-        // 更新塔位显示
-        this.updateTowerCount();
-        
-        console.log(`合成了 ${combinedTowerData.name} (${TOWER_RARITY[combinedTowerData.rarity].name})`);
+        // 检查是否还有其他合成机会
+        this.time.delayedCall(100, () => {
+            this.checkForCombinations();
+        });
     }
 
     transferEquipmentsToTower(keepTower, allEquipments) {

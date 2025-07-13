@@ -226,17 +226,48 @@ export class NotificationUI {
     }
 
     // 波次提示系统
-    showWaveNotification(wave, isStart = true) {
+    showWaveNotification(wave, isStart = true, customText = null) {
         if (isStart) {
-            if (wave === 20) {
-                this.showNotification(`第 ${wave} 波开始！BOSS波次！`, 'error', 3000, 'center');
-            } else if (wave % 5 === 0) {
-                this.showNotification(`第 ${wave} 波开始！精英波次！`, 'warning', 2500, 'center');
+            let message, type, duration;
+            
+            if (customText) {
+                // 使用自定义文本
+                message = `第 ${wave} 波开始！${customText}`;
+                
+                // 根据内容判断类型
+                if (customText.includes('Boss') || customText.includes('BOSS')) {
+                    type = 'error';
+                    duration = 3000;
+                } else if (customText.includes('成长') || customText.includes('选择')) {
+                    type = 'warning';
+                    duration = 2500;
+                } else if (customText.includes('高压') || customText.includes('挑战')) {
+                    type = 'warning';
+                    duration = 2500;
+                } else {
+                    type = 'info';
+                    duration = 2000;
+                }
             } else {
-                this.showNotification(`第 ${wave} 波开始`, 'info', 2000, 'center');
+                // 兼容旧版本逻辑
+                if (wave === 30 || wave === 24 || wave === 18) {
+                    message = `第 ${wave} 波开始！BOSS波次！`;
+                    type = 'error';
+                    duration = 3000;
+                } else if ([4, 10, 16, 22, 28].includes(wave)) {
+                    message = `第 ${wave} 波开始！成长选择！`;
+                    type = 'warning';
+                    duration = 2500;
+                } else {
+                    message = `第 ${wave} 波开始`;
+                    type = 'info';
+                    duration = 2000;
+                }
             }
+            
+            this.showNotification(message, type, duration, 'center');
         } else {
-            if (wave === 20) {
+            if ([18, 24, 30].includes(wave)) {
                 this.showNotification('恭喜！击败了BOSS！', 'success', 3000, 'center');
             } else {
                 this.showNotification(`第 ${wave} 波完成`, 'success', 1500, 'center');

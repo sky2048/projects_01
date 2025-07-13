@@ -562,4 +562,58 @@ export class Tower extends Phaser.Physics.Arcade.Sprite {
         if (this.moveButtonText) this.moveButtonText.destroy();
         super.destroy();
     }
+
+    // 重新计算塔的属性（考虑永久buff和装备效果）
+    recalculateStats() {
+        // 从原始属性开始
+        let newDamage = this.originalStats.damage;
+        let newRange = this.originalStats.range;
+        let newAttackSpeed = this.originalStats.attackSpeed;
+        
+        // 应用永久buff
+        if (this.permanentBuffs) {
+            this.permanentBuffs.forEach(buff => {
+                if (buff.effect.damage) {
+                    newDamage *= (1 + buff.effect.damage);
+                }
+                if (buff.effect.range) {
+                    newRange *= (1 + buff.effect.range);
+                }
+                if (buff.effect.attackSpeed) {
+                    newAttackSpeed *= (1 + buff.effect.attackSpeed);
+                }
+            });
+        }
+        
+        // 应用装备效果（如果有装备管理器的话）
+        if (this.equipment && this.scene.equipmentManager) {
+            this.equipment.forEach(equipment => {
+                if (equipment.effect) {
+                    if (equipment.effect.damage) {
+                        if (typeof equipment.effect.damage === 'number' && equipment.effect.damage > 1) {
+                            // 固定数值加成
+                            newDamage += equipment.effect.damage;
+                        } else {
+                            // 百分比加成
+                            newDamage *= (1 + equipment.effect.damage);
+                        }
+                    }
+                    if (equipment.effect.range) {
+                        newRange *= (1 + equipment.effect.range);
+                    }
+                    if (equipment.effect.attackSpeed) {
+                        newAttackSpeed *= (1 + equipment.effect.attackSpeed);
+                    }
+                }
+            });
+        }
+        
+        // 更新属性
+        this.damage = Math.floor(newDamage);
+        this.range = Math.floor(newRange);
+        this.attackSpeed = newAttackSpeed;
+        this.attackCooldown = 1000 / this.attackSpeed;
+        
+        console.log(`塔属性重新计算: 伤害${this.damage}, 射程${this.range}, 攻速${this.attackSpeed.toFixed(2)}`);
+    }
 } 

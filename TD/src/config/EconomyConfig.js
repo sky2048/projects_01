@@ -20,6 +20,12 @@ export const ECONOMY_CONFIG = {
 export const EXPERIENCE_CONFIG = {
     // 计算每个等级需要的经验值
     getExpRequiredForLevel: (level) => {
+        // 安全检查：确保level是有效的数字
+        if (typeof level !== 'number' || isNaN(level) || level < 1) {
+            console.warn('getExpRequiredForLevel: 无效的等级参数', level);
+            return 12; // 返回1级的经验需求作为默认值
+        }
+        
         // 等级1需要12经验，之后每级递增6经验
         // 等级1: 12, 等级2: 18, 等级3: 24, 等级4: 30...
         return 6 + (level * 6);
@@ -27,6 +33,12 @@ export const EXPERIENCE_CONFIG = {
     
     // 获取总共需要的经验值（从1级到目标等级）
     getTotalExpRequiredForLevel: (targetLevel) => {
+        // 安全检查：确保targetLevel是有效的数字
+        if (typeof targetLevel !== 'number' || isNaN(targetLevel) || targetLevel < 1) {
+            console.warn('getTotalExpRequiredForLevel: 无效的目标等级参数', targetLevel);
+            return 12; // 返回1级的经验需求作为默认值
+        }
+        
         let totalExp = 0;
         for (let level = 1; level <= targetLevel; level++) {
             totalExp += EXPERIENCE_CONFIG.getExpRequiredForLevel(level);

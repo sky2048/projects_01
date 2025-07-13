@@ -4,9 +4,9 @@ import { UIScene } from './scenes/UIScene.js';
 
 const config = {
     type: Phaser.WEBGL,  // 强制使用WebGL渲染器
-    title: '自走棋塔防 v0.1.2',
+    title: '自走棋塔防 v0.1.5',
     description: '云顶之弈风格的塔防游戏',
-    version: '0.1.2',
+    version: '0.1.5',
     parent: 'game-container',
     width: 1280,
     height: 720,
@@ -40,7 +40,7 @@ const config = {
 
 // 输出版本信息
 console.log('🎮 自走棋塔防游戏启动');
-console.log('📌 版本: v0.1.2');
+console.log('📌 版本: v0.1.5');
 console.log('🔧 核心修复 (v0.1.0):');
 console.log('  ✅ 暂停功能破坏出怪节奏 (使用游戏时间而非真实时间)');
 console.log('  ✅ 玩家获得双倍金币 (移除重复的金币奖励逻辑)');

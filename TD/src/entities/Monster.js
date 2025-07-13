@@ -116,7 +116,13 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
 
     moveToNextPoint() {
         // 安全检查：确保场景和路径有效
-        if (!this.scene || !this.scene.tweens || !this.path || this.pathIndex >= this.path.length) {
+        if (!this.scene || !this.scene.tweens || !this.path) {
+            return;
+        }
+        
+        // 检查是否到达终点
+        if (this.pathIndex >= this.path.length) {
+            this.reachEnd();
             return;
         }
         
@@ -333,6 +339,13 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         while (remainingDistance > 0 && newIndex < this.path.length - 1) {
             const currentPoint = this.path[newIndex];
             const nextPoint = this.path[newIndex + 1];
+            
+            // 安全检查：确保路径点存在
+            if (!currentPoint || !nextPoint) {
+                console.warn('传送时路径点不存在:', { newIndex, pathLength: this.path.length });
+                break;
+            }
+            
             const segmentLength = Phaser.Math.Distance.Between(
                 currentPoint.x, currentPoint.y, nextPoint.x, nextPoint.y
             );
@@ -353,9 +366,9 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
         // 修复路径索引设置：如果传送到路径段中间，设置为下一个路径点
         // 这样moveToNextPoint()会让怪物继续前进而不是后退
         if (teleportedToSegmentMiddle) {
-            this.pathIndex = newIndex + 1;
+            this.pathIndex = Math.min(newIndex + 1, this.path.length - 1);
         } else {
-            this.pathIndex = newIndex;
+            this.pathIndex = Math.min(newIndex, this.path.length - 1);
         }
         
         // 停止当前移动并重新开始
@@ -571,6 +584,16 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     update() {
         // 处理持续效果
         this.handleContinuousEffects();
+
+        // 终点强制检测（防止Tween丢失回调导致漏判）
+        if (this.path && this.path.length > 0) {
+            const endPoint = this.path[this.path.length - 1];
+            const distToEnd = Phaser.Math.Distance.Between(this.x, this.y, endPoint.x, endPoint.y);
+            if (distToEnd < 10 && this.active) {
+                this.reachEnd();
+                return; // 防止多次销毁
+            }
+        }
         
         // 更新视觉元素位置
         if (this.body_graphic) {

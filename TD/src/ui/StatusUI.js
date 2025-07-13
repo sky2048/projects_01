@@ -218,7 +218,7 @@ export class StatusUI {
         this.elements.mapNameText.setOrigin(0.5, 0.5);
 
         // 波次显示（移至上方居中）
-        this.elements.waveText = this.scene.add.text(640, 30, '波次: 1/20', {
+        this.elements.waveText = this.scene.add.text(640, 30, '波次: 1/30', {
             fontSize: '24px',
             fill: '#ffffff',
             fontFamily: 'Arial, sans-serif',
@@ -226,6 +226,16 @@ export class StatusUI {
             strokeThickness: 2
         });
         this.elements.waveText.setOrigin(0.5, 0.5);
+
+        // 阶段和波次详情显示
+        this.elements.phaseInfoText = this.scene.add.text(640, 55, '', {
+            fontSize: '14px',
+            fill: '#cccccc',
+            fontFamily: 'Arial, sans-serif',
+            stroke: '#000000',
+            strokeThickness: 1
+        });
+        this.elements.phaseInfoText.setOrigin(0.5, 0.5);
 
         // 选中塔的信息显示
         this.elements.selectedTowerInfo = this.scene.add.text(640, 80, '', {
@@ -320,7 +330,7 @@ export class StatusUI {
 
     createVersionDisplay() {
         // 显示版本号 - 移到左上角
-        this.elements.versionText = this.scene.add.text(20, 20, 'v0.1.2', {
+        this.elements.versionText = this.scene.add.text(20, 20, 'v0.1.5', {
             fontSize: '12px',
             fill: '#888888',
             fontFamily: 'Arial, sans-serif'
@@ -422,8 +432,15 @@ export class StatusUI {
         this.elements.healthIcon.setStrokeStyle(2, theme.stroke);
     }
 
-    updateWave(wave) {
-        this.safeUpdateText(this.elements.waveText, `波次: ${wave}/20`);
+    updateWave(wave, phase = null, waveInfo = null) {
+        this.safeUpdateText(this.elements.waveText, `波次: ${wave}/30`);
+        
+        // 更新阶段信息显示
+        if (phase && waveInfo) {
+            const phaseWave = ((wave - 1) % 6) + 1; // 阶段内波次 (1-6)
+            const phaseText = `阶段 ${phase}-${phaseWave}: ${waveInfo.name}`;
+            this.safeUpdateText(this.elements.phaseInfoText, phaseText);
+        }
     }
 
     updateMapName(mapName) {
@@ -491,12 +508,35 @@ export class StatusUI {
             levelModifiers = LEVEL_RARITY_MODIFIERS[maxLevel];
         }
         
+        // 安全检查：确保levelModifiers存在
+        if (!levelModifiers) {
+            console.warn('无法获取等级概率修饰符，使用默认值');
+            levelModifiers = LEVEL_RARITY_MODIFIERS[1]; // 使用1级作为默认值
+        }
+        
         // 更新每个概率文本
-        this.elements.probabilityList.forEach(probabilityText => {
-            if (!probabilityText || !probabilityText.rarityKey) return;
+        this.elements.probabilityList.forEach((probabilityText, index) => {
+            // 安全检查：确保probabilityText存在且有效
+            if (!probabilityText || typeof probabilityText.setText !== 'function') {
+                console.warn(`概率文本元素[${index}]无效，跳过更新`);
+                return;
+            }
+            
+            // 安全检查：确保rarityKey存在
+            if (!probabilityText.rarityKey) {
+                console.warn(`概率文本元素[${index}]缺少rarityKey，跳过更新`);
+                return;
+            }
             
             const rarityKey = probabilityText.rarityKey;
             const rarityData = TOWER_RARITY[rarityKey];
+            
+            // 安全检查：确保rarityData存在
+            if (!rarityData) {
+                console.warn(`品质数据不存在: ${rarityKey}`);
+                return;
+            }
+            
             const probability = levelModifiers[rarityKey];
             
             if (probability !== undefined && probability > 0) {

@@ -15,7 +15,7 @@ export class EquipmentManager {
         const items = Object.values(EQUIPMENT_CONFIG.BASIC_ITEMS);
         
         // 计算掉落概率
-        let baseDropChance = 0.1; // 普通怪物10%基础掉落率
+        let baseDropChance = 0; // 普通怪物无掉落
         if (isElite) baseDropChance = 0.25; // 精英怪25%
         if (isBoss) baseDropChance = 0.8; // BOSS 80%
         
@@ -289,7 +289,13 @@ export class EquipmentManager {
             let totalRangeMultiplier = 1;
             
             // 遍历所有装备，累加各类属性加成
-            tower.equipment.forEach(equipment => {
+            tower.equipment.forEach((equipment, index) => {
+                // 安全检查：确保装备和效果存在
+                if (!equipment || !equipment.effect) {
+                    console.warn(`塔装备[${index}]无效或缺少效果，跳过`, equipment);
+                    return;
+                }
+                
                 const effect = equipment.effect;
                 
                 // 累加伤害加成

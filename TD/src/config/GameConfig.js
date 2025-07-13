@@ -1,7 +1,7 @@
 // 统一导入所有配置模块
 import { TOWER_RARITY, LEVEL_RARITY_MODIFIERS, TOWER_TYPES, SYNERGIES } from './TowerConfig.js';
 import { ECONOMY_CONFIG, EXPERIENCE_CONFIG } from './EconomyConfig.js';
-import { WAVE_CONFIG, MONSTER_MODIFIERS } from './WaveConfig.js';
+import { WAVE_CONFIG, PHASE_CONFIG, ROGUELIKE_OPTIONS, ENVIRONMENT_EVENTS, MONSTER_MODIFIERS } from './WaveConfig.js';
 import { MAP_CONFIG } from './MapConfig.js';
 import { EQUIPMENT_CONFIG } from './EquipmentConfig.js';
 
@@ -19,6 +19,9 @@ export {
     
     // 波次和怪物配置
     WAVE_CONFIG,
+    PHASE_CONFIG,
+    ROGUELIKE_OPTIONS,
+    ENVIRONMENT_EVENTS,
     MONSTER_MODIFIERS,
     
     // 地图配置
