@@ -47,6 +47,11 @@ export class WaveManager {
         // 获取UI场景
         const uiScene = this.scene.scene.get('UIScene');
         
+        // 先更新UI指示器（包括肉鸽波次）
+        if (uiScene && uiScene.updateWave) {
+            uiScene.updateWave(this.currentWave, this.currentPhase, waveInfo);
+        }
+        
         // 检查是否是肉鸽三选一波次
         if (this.isRoguelikeWave(this.currentWave)) {
             this.handleRoguelikeWave(uiScene);
@@ -62,11 +67,6 @@ export class WaveManager {
         if (uiScene && uiScene.showWaveNotification) {
             const phaseInfo = ` [阶段${this.currentPhase}: ${PHASE_CONFIG[this.currentPhase].name}]`;
             uiScene.showWaveNotification(this.currentWave, true, waveInfo.name + phaseInfo);
-        }
-        
-        // 更新UI
-        if (uiScene && uiScene.updateWave) {
-            uiScene.updateWave(this.currentWave, this.currentPhase, waveInfo);
         }
         
         // 给予波次奖励（包括永久buff加成）
@@ -234,25 +234,10 @@ export class WaveManager {
         }
     }
 
-    // 肉鸽选择后继续波次
+    // 肉鸽选择后完成波次
     continueAfterRoguelike() {
-        // 正常开始这一波的战斗
-        const uiScene = this.scene.scene.get('UIScene');
-        const waveInfo = this.getWaveInfo(this.currentWave);
-        
-        // 显示波次开始提示
-        if (uiScene && uiScene.showWaveNotification) {
-            const phaseInfo = ` [阶段${this.currentPhase}: ${PHASE_CONFIG[this.currentPhase].name}]`;
-            uiScene.showWaveNotification(this.currentWave, true, waveInfo.name + phaseInfo);
-        }
-        
-        // 设置波次参数
-        this.setupWaveData();
-        
-        this.waveInProgress = true;
-        this.monstersSpawned = 0;
-        this.waveStartTime = this.scene.time.now;
-        this.lastSpawnTime = 0;
+        // 肉鸽波次选择完成后直接结束该波次，进入下一波
+        this.completeWave();
     }
 
     // 激活环境事件
@@ -525,20 +510,6 @@ export class WaveManager {
             return;
         }
         
-        // 显示下一波倒计时提示
-        if (uiScene && uiScene.showNotification) {
-            const nextWave = this.currentWave + 1;
-            const nextWaveInfo = this.getWaveInfo(nextWave);
-            
-            if (this.isBossWave(nextWave)) {
-                uiScene.showNotification(`准备迎接Boss！${this.timeBetweenWaves / 1000} 秒后开始第 ${nextWave} 波: ${nextWaveInfo.name}`, 'warning', this.timeBetweenWaves - 500);
-            } else if (this.isRoguelikeWave(nextWave)) {
-                uiScene.showNotification(`即将进入成长选择！${this.timeBetweenWaves / 1000} 秒后开始第 ${nextWave} 波`, 'info', this.timeBetweenWaves - 500);
-            } else {
-                uiScene.showNotification(`${this.timeBetweenWaves / 1000} 秒后开始第 ${nextWave} 波: ${nextWaveInfo.name}`, 'info', this.timeBetweenWaves - 500);
-            }
-        }
-        
         // 波次完成后自动刷新商店（除非被锁定）
         if (this.scene.towerShop) {
             if (!this.scene.towerShop.getIsLocked()) {
@@ -551,6 +522,13 @@ export class WaveManager {
                     uiScene.showNotification('商店已锁定，跳过自动刷新', 'info', 2000);
                 }
             }
+        }
+        
+        // 启动倒计时进度条
+        if (uiScene && uiScene.startWaveCountdown) {
+            const nextWave = this.currentWave + 1;
+            const nextWaveInfo = this.getWaveInfo(nextWave);
+            uiScene.startWaveCountdown(this.timeBetweenWaves, nextWave, nextWaveInfo);
         }
         
         // 延迟开始下一波

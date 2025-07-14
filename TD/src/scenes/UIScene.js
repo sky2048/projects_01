@@ -304,6 +304,13 @@ export class UIScene extends Phaser.Scene {
         }
     }
 
+    // 启动波次倒计时进度条
+    startWaveCountdown(duration, nextWave, nextWaveInfo) {
+        if (this.statusUI && this.statusUI.startCountdown) {
+            this.statusUI.startCountdown(duration, nextWave, nextWaveInfo);
+        }
+    }
+
     hideRoguelikeSelection() {
         if (this.roguelikeUI) {
             this.roguelikeUI.hide();

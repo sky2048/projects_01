@@ -100,10 +100,22 @@ export class StatusUI {
             towerLimitBackgroundGlow: null,
             towerLimitIcon: null,
             
-            // 波次显示元素
+            // 波次指示器元素
+            waveBarBackground: null,
             waveText: null,
-            mapNameText: null,
+            stageNameText: null,
+            currentRoundBackground: null,
+            roundTypeIcon: null,
+            roundStatusText: null,
+            currentRoundInfo: null,
+            countdownText: null,
+            playPauseButton: null,
+            waveProgressBackground: null,
+            waveProgressForeground: null,
             selectedTowerInfo: null,
+
+            // 阶段波次时间轴
+            waveTimeline: [],
             
             // 等级和经验元素
             levelText: null,
@@ -206,39 +218,148 @@ export class StatusUI {
     }
 
     createWaveDisplay() {
-        // 地图名称显示（上方左侧）
-        this.elements.mapNameText = this.scene.add.text(120, 30, '', {
-            fontSize: '18px',
-            fill: '#88dd88',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
-        });
-        this.elements.mapNameText.setOrigin(0.5, 0.5);
+        // 紧凑的波次时间轴配置
+        const waveConfig = {
+            x: 640,
+            y: 20,
+            width: 700,
+            height: 40,
+            progressBarY: 65,
+            progressBarWidth: 700,
+            progressBarHeight: 4
+        };
 
-        // 波次显示（移至上方居中）
-        this.elements.waveText = this.scene.add.text(640, 30, '波次: 1/30', {
-            fontSize: '24px',
-            fill: '#ffffff',
+        // 创建主背景条
+        this.elements.waveBarBackground = this.scene.add.rectangle(
+            waveConfig.x, waveConfig.y, 
+            waveConfig.width, waveConfig.height, 
+            0x2d3748, 0.9
+        );
+        this.elements.waveBarBackground.setStrokeStyle(1, 0x4a5568, 0.8);
+
+        // 当前阶段与回合显示 (左侧)
+        this.elements.waveText = this.scene.add.text(waveConfig.x - 300, waveConfig.y, '🏆 1-1', {
+            fontSize: '14px',
+            fill: '#c6a876',
             fontFamily: 'Arial, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 2
+            fontStyle: 'bold'
         });
         this.elements.waveText.setOrigin(0.5, 0.5);
 
-        // 阶段和波次详情显示
-        this.elements.phaseInfoText = this.scene.add.text(640, 55, '', {
-            fontSize: '14px',
-            fill: '#cccccc',
-            fontFamily: 'Arial, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 1
+        // 阶段名称显示
+        this.elements.stageNameText = this.scene.add.text(waveConfig.x - 220, waveConfig.y, '前期-铺垫', {
+            fontSize: '12px',
+            fill: '#888888',
+            fontFamily: 'Arial, sans-serif'
         });
-        this.elements.phaseInfoText.setOrigin(0.5, 0.5);
+        this.elements.stageNameText.setOrigin(0.5, 0.5);
+
+        // 创建阶段波次时间轴 - 增加间距避免重叠
+        this.elements.waveTimeline = [];
+        const timelineStartX = waveConfig.x - 120;  // 调整起始位置
+        const timelineY = waveConfig.y;  // 与主背景条同一水平线
+        const slotWidth = 40;  // 略微减小槽位宽度
+        const slotHeight = 32; // 保持高度
+        const slotSpacing = 12; // 增加间距到12px
+        
+        for (let i = 0; i < 6; i++) {
+            const slotX = timelineStartX + (i * (slotWidth + slotSpacing));
+            
+            // 波次槽位背景
+            const slotBackground = this.scene.add.rectangle(
+                slotX, timelineY, 
+                slotWidth, slotHeight, 
+                0x1a202c, 0.8
+            );
+            slotBackground.setStrokeStyle(1, 0x4a5568, 0.6);
+            
+            // 波次图标容器
+            const iconGraphics = this.scene.add.graphics();
+            iconGraphics.x = slotX;
+            iconGraphics.y = timelineY - 6;
+            
+            // 波次编号文本
+            const waveNumberText = this.scene.add.text(slotX, timelineY - 12, `${i + 1}`, {
+                fontSize: '10px',
+                fill: '#cccccc',
+                fontFamily: 'Arial, sans-serif',
+                fontStyle: 'bold'
+            });
+            waveNumberText.setOrigin(0.5, 0.5);
+            
+            // 波次类型文本（显示在下方）
+            const waveTypeText = this.scene.add.text(slotX, timelineY + 10, '普通', {
+                fontSize: '8px',
+                fill: '#888888',
+                fontFamily: 'Arial, sans-serif'
+            });
+            waveTypeText.setOrigin(0.5, 0.5);
+            
+            this.elements.waveTimeline.push({
+                background: slotBackground,
+                icon: iconGraphics,
+                numberText: waveNumberText,
+                typeText: waveTypeText,
+                isCompleted: false,
+                isCurrent: false
+            });
+        }
+
+        // 当前回合状态文字（右侧）
+        this.elements.roundStatusText = this.scene.add.text(waveConfig.x + 200, waveConfig.y - 5, '准备阶段', {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold'
+        });
+        this.elements.roundStatusText.setOrigin(0.5, 0.5);
+
+        // 当前回合详细信息
+        this.elements.currentRoundInfo = this.scene.add.text(waveConfig.x + 200, waveConfig.y + 8, '点击开始下一回合', {
+            fontSize: '9px',
+            fill: '#cccccc',
+            fontFamily: 'Arial, sans-serif'
+        });
+        this.elements.currentRoundInfo.setOrigin(0.5, 0.5);
+
+        // 倒计时显示
+        this.elements.countdownText = this.scene.add.text(waveConfig.x + 280, waveConfig.y, '0', {
+            fontSize: '16px',
+            fill: '#ffffff',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold'
+        });
+        this.elements.countdownText.setOrigin(0.5, 0.5);
+
+        // 暂停/播放按钮
+        this.elements.playPauseButton = this.scene.add.text(waveConfig.x + 340, waveConfig.y, '▶️', {
+            fontSize: '14px'
+        });
+        this.elements.playPauseButton.setOrigin(0.5, 0.5);
+        this.elements.playPauseButton.setInteractive({ useHandCursor: true });
+
+        // 创建底部进度条
+        const progressX = waveConfig.x;
+        const progressY = waveConfig.progressBarY;
+        
+        // 进度条背景
+        this.elements.waveProgressBackground = this.scene.add.rectangle(
+            progressX, progressY,
+            waveConfig.progressBarWidth, waveConfig.progressBarHeight,
+            0x1a202c, 0.8
+        );
+        this.elements.waveProgressBackground.setStrokeStyle(1, 0x2d3748, 1);
+
+        // 进度条前景
+        this.elements.waveProgressForeground = this.scene.add.rectangle(
+            progressX - waveConfig.progressBarWidth/2, progressY,
+            0, waveConfig.progressBarHeight,
+            0x48bb78, 1
+        );
+        this.elements.waveProgressForeground.setOrigin(0, 0.5);
 
         // 选中塔的信息显示
-        this.elements.selectedTowerInfo = this.scene.add.text(640, 80, '', {
+        this.elements.selectedTowerInfo = this.scene.add.text(640, 90, '', {
             fontSize: '16px',
             fill: '#cccccc',
             fontFamily: 'Arial, sans-serif',
@@ -247,6 +368,221 @@ export class StatusUI {
             strokeThickness: 1
         });
         this.elements.selectedTowerInfo.setOrigin(0.5);
+
+        // 初始化时间轴状态 - 确保创建后立即更新到当前波次
+        this.scene.time.delayedCall(100, () => {
+            const gameScene = this.getGameScene();
+            if (gameScene && gameScene.waveManager) {
+                const currentWave = gameScene.waveManager.getCurrentWave();
+                if (currentWave > 0) {
+                    this.updateWave(currentWave, null, gameScene.waveManager.getWaveInfo(currentWave));
+                }
+            }
+        });
+    }
+
+    // 绘制回合类型图标
+    drawRoundTypeIcon(type) {
+        if (!this.elements.roundTypeIcon) return;
+        
+        const graphics = this.elements.roundTypeIcon;
+        graphics.clear();
+        
+        switch(type) {
+            case 'pve':
+                // 绘制野怪图标 - 石头怪物
+                graphics.fillStyle(0x8b7355); // 石头棕色
+                graphics.fillCircle(0, 0, 8);
+                
+                // 眼睛
+                graphics.fillStyle(0xff4444);
+                graphics.fillCircle(-3, -2, 1.5);
+                graphics.fillCircle(3, -2, 1.5);
+                
+                // 嘴巴
+                graphics.lineStyle(1, 0x000000);
+                graphics.beginPath();
+                graphics.arc(0, 2, 2, 0, Math.PI);
+                graphics.strokePath();
+                
+                // 石头纹理
+                graphics.fillStyle(0x6b5b47);
+                graphics.fillCircle(-2, -4, 1);
+                graphics.fillCircle(4, 1, 1);
+                graphics.fillCircle(-4, 3, 1);
+                break;
+                
+            case 'boss':
+                // 绘制BOSS图标 - 王冠
+                graphics.fillStyle(0xffd700); // 金色
+                graphics.fillTriangle(-6, 2, 0, -6, 6, 2);
+                graphics.fillRect(-8, 2, 16, 4);
+                
+                // 宝石
+                graphics.fillStyle(0xff4444);
+                graphics.fillCircle(-4, 0, 1.5);
+                graphics.fillStyle(0x4444ff);
+                graphics.fillCircle(0, -2, 1.5);
+                graphics.fillStyle(0x44ff44);
+                graphics.fillCircle(4, 0, 1.5);
+                break;
+                
+            case 'elite':
+                // 绘制精英图标 - 闪电
+                graphics.fillStyle(0xffaa00);
+                graphics.fillTriangle(-2, -6, 2, -2, -1, 0);
+                graphics.fillTriangle(1, 0, -2, 2, 2, 6);
+                
+                // 发光效果
+                graphics.fillStyle(0xffff44, 0.5);
+                graphics.fillTriangle(-3, -7, 3, -3, -2, -1);
+                graphics.fillTriangle(2, -1, -3, 3, 3, 7);
+                break;
+                
+            case 'augment':
+                // 绘制强化图标 - 魔法水晶
+                graphics.fillStyle(0x8b5cf6);
+                graphics.fillTriangle(0, -6, -4, 2, 4, 2);
+                graphics.fillTriangle(0, 6, -4, -2, 4, -2);
+                
+                // 发光效果
+                graphics.fillStyle(0xc084fc, 0.6);
+                graphics.fillCircle(0, 0, 3);
+                break;
+                
+            default:
+                // 默认战斗图标 - 交叉剑
+                graphics.lineStyle(2, 0xcccccc);
+                graphics.beginPath();
+                graphics.moveTo(-5, -5);
+                graphics.lineTo(5, 5);
+                graphics.moveTo(5, -5);
+                graphics.lineTo(-5, 5);
+                graphics.strokePath();
+                
+                // 剑柄
+                graphics.fillStyle(0x8b4513);
+                graphics.fillRect(-1, 4, 2, 3);
+                graphics.fillRect(4, -1, 3, 2);
+                break;
+        }
+    }
+
+    // 绘制波次时间轴图标
+    drawWaveTimelineIcon(graphics, type, isCompleted, isCurrent) {
+        graphics.clear();
+        
+        const iconSize = 6; // 放大2倍：3 * 2
+        const centerX = 0;
+        const centerY = 0;
+        
+        // 根据状态设置颜色
+        let iconColor = 0x666666;
+        let strokeColor = 0x888888;
+        
+        if (isCompleted) {
+            iconColor = 0x48bb78;
+            strokeColor = 0x5fd688;
+        } else if (isCurrent) {
+            iconColor = 0xffd700;
+            strokeColor = 0xffed4a;
+        }
+        
+        // 根据波次类型绘制不同图标
+        switch (type) {
+            case 'normal':
+                // 普通波次：圆形
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                graphics.fillCircle(centerX, centerY, iconSize);
+                graphics.strokeCircle(centerX, centerY, iconSize);
+                break;
+                
+            case 'roguelike':
+                // 肉鸽波次：菱形
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                graphics.beginPath();
+                graphics.moveTo(centerX, centerY - iconSize);
+                graphics.lineTo(centerX + iconSize, centerY);
+                graphics.lineTo(centerX, centerY + iconSize);
+                graphics.lineTo(centerX - iconSize, centerY);
+                graphics.closePath();
+                graphics.fillPath();
+                graphics.strokePath();
+                break;
+                
+            case 'challenge':
+                // 挑战波次：三角形
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                graphics.beginPath();
+                graphics.moveTo(centerX, centerY - iconSize);
+                graphics.lineTo(centerX + iconSize, centerY + iconSize);
+                graphics.lineTo(centerX - iconSize, centerY + iconSize);
+                graphics.closePath();
+                graphics.fillPath();
+                graphics.strokePath();
+                break;
+                
+            case 'high_pressure':
+                // 高压波次：星形
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                this.drawStar(graphics, centerX, centerY, iconSize, 5);
+                break;
+                
+            case 'boss':
+                // Boss波次：皇冠形状
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                this.drawCrown(graphics, centerX, centerY, iconSize);
+                break;
+                
+            default:
+                // 默认：圆形
+                graphics.fillStyle(iconColor, 1);
+                graphics.lineStyle(2, strokeColor, 1);
+                graphics.fillCircle(centerX, centerY, iconSize);
+                graphics.strokeCircle(centerX, centerY, iconSize);
+                break;
+        }
+    }
+    
+    // 绘制星形辅助方法
+    drawStar(graphics, x, y, radius, points) {
+        const angle = Math.PI / points;
+        graphics.beginPath();
+        for (let i = 0; i < 2 * points; i++) {
+            const r = (i % 2 === 0) ? radius : radius * 0.5;
+            const currentAngle = i * angle - Math.PI / 2;
+            const px = x + Math.cos(currentAngle) * r;
+            const py = y + Math.sin(currentAngle) * r;
+            if (i === 0) {
+                graphics.moveTo(px, py);
+            } else {
+                graphics.lineTo(px, py);
+            }
+        }
+        graphics.closePath();
+        graphics.fillPath();
+        graphics.strokePath();
+    }
+    
+    // 绘制皇冠辅助方法
+    drawCrown(graphics, x, y, size) {
+        graphics.beginPath();
+        graphics.moveTo(x - size, y + size * 0.5);
+        graphics.lineTo(x - size * 0.5, y - size * 0.5);
+        graphics.lineTo(x - size * 0.2, y);
+        graphics.lineTo(x, y - size);
+        graphics.lineTo(x + size * 0.2, y);
+        graphics.lineTo(x + size * 0.5, y - size * 0.5);
+        graphics.lineTo(x + size, y + size * 0.5);
+        graphics.lineTo(x - size, y + size * 0.5);
+        graphics.closePath();
+        graphics.fillPath();
+        graphics.strokePath();
     }
 
     createLevelAndExperience() {
@@ -433,19 +769,322 @@ export class StatusUI {
     }
 
     updateWave(wave, phase = null, waveInfo = null) {
-        this.safeUpdateText(this.elements.waveText, `波次: ${wave}/30`);
+        // 计算阶段和阶段内回合
+        const currentStage = Math.ceil(wave / 6); // 当前阶段 (1-5)
+        const stageRound = ((wave - 1) % 6) + 1; // 阶段内回合 (1-6)
         
-        // 更新阶段信息显示
-        if (phase && waveInfo) {
-            const phaseWave = ((wave - 1) % 6) + 1; // 阶段内波次 (1-6)
-            const phaseText = `阶段 ${phase}-${phaseWave}: ${waveInfo.name}`;
-            this.safeUpdateText(this.elements.phaseInfoText, phaseText);
+        // 调试信息
+        console.log(`StatusUI updateWave: wave=${wave}, phase=${phase}, currentStage=${currentStage}, stageRound=${stageRound}`, waveInfo);
+        
+        // 更新当前阶段与回合显示
+        this.safeUpdateText(this.elements.waveText, `🏆 ${currentStage}-${stageRound}`);
+        
+        // 更新阶段名称
+        this.updateStageName(currentStage);
+        
+        // 更新阶段波次时间轴
+        this.updateWaveTimeline(currentStage, stageRound, wave);
+        
+        // 更新回合类型和状态
+        this.updateRoundType(currentStage, stageRound, waveInfo);
+        
+        // 更新进度条
+        const totalWaves = 30;
+        const progress = wave / totalWaves;
+        if (this.elements.waveProgressForeground) {
+            const maxWidth = 600; // 进度条总宽度
+            this.elements.waveProgressForeground.displayWidth = maxWidth * progress;
         }
     }
 
-    updateMapName(mapName) {
-        this.safeUpdateText(this.elements.mapNameText, mapName);
+    // 更新阶段名称
+    updateStageName(stage) {
+        const stageNames = {
+            1: '前期-铺垫',
+            2: '中期-发展',
+            3: '中期-考验',
+            4: '后期-决战',
+            5: '终局-生存'
+        };
+        
+        const stageName = stageNames[stage] || '未知阶段';
+        this.safeUpdateText(this.elements.stageNameText, stageName);
     }
+
+    // 更新阶段波次时间轴
+    updateWaveTimeline(currentStage, currentRound, currentWave) {
+        if (!this.elements.waveTimeline || this.elements.waveTimeline.length === 0) {
+            return;
+        }
+
+        // 从配置中获取当前阶段的波次信息
+        const gameScene = this.getGameScene();
+        if (!gameScene || !gameScene.waveManager) {
+            return;
+        }
+
+        // 计算当前阶段的起始波次
+        const stageStartWave = (currentStage - 1) * 6 + 1;
+        
+        // 调试信息
+        console.log(`updateWaveTimeline: currentStage=${currentStage}, currentRound=${currentRound}, currentWave=${currentWave}, stageStartWave=${stageStartWave}`);
+        
+        // 更新每个时间轴槽位
+        for (let i = 0; i < 6; i++) {
+            const timelineSlot = this.elements.waveTimeline[i];
+            if (!timelineSlot) continue;
+            
+            const waveNumber = stageStartWave + i;
+            const roundNumber = i + 1;
+            
+            // 获取这个波次的信息
+            const waveInfo = gameScene.waveManager.getWaveInfo(waveNumber);
+            const waveType = waveInfo.type || 'normal';
+            
+            // 确定波次状态
+            const isCompleted = waveNumber < currentWave;
+            const isCurrent = waveNumber === currentWave;
+            
+            // 调试信息
+            if (i < 2) { // 只打印前两个槽位的信息
+                console.log(`  Slot ${i+1}: waveNumber=${waveNumber}, isCompleted=${isCompleted}, isCurrent=${isCurrent}`);
+            }
+            
+            // 更新波次编号
+            timelineSlot.numberText.setText(roundNumber.toString());
+            
+            // 更新波次类型文本
+            const typeNames = {
+                'normal': '普通',
+                'roguelike': '肉鸽',
+                'challenge': '挑战',
+                'high_pressure': '高压',
+                'boss': 'Boss'
+            };
+            const typeName = typeNames[waveType] || '普通';
+            timelineSlot.typeText.setText(typeName);
+            
+            // 更新背景颜色和样式
+            if (isCompleted) {
+                timelineSlot.background.setFillStyle(0x2d5a2d, 0.8); // 完成：绿色
+                timelineSlot.background.setStrokeStyle(1, 0x48bb78, 1);
+                timelineSlot.numberText.setColor('#48bb78');
+                timelineSlot.typeText.setColor('#48bb78');
+            } else if (isCurrent) {
+                timelineSlot.background.setFillStyle(0x5a5a2d, 0.8); // 当前：黄色
+                timelineSlot.background.setStrokeStyle(3, 0xffd700, 1); // 增加边框厚度突出显示
+                timelineSlot.numberText.setColor('#ffd700');
+                timelineSlot.typeText.setColor('#ffd700');
+            } else {
+                timelineSlot.background.setFillStyle(0x1a202c, 0.8); // 未来：灰色
+                timelineSlot.background.setStrokeStyle(1, 0x4a5568, 0.6);
+                timelineSlot.numberText.setColor('#cccccc');
+                timelineSlot.typeText.setColor('#888888');
+            }
+            
+            // 更新图标
+            this.drawWaveTimelineIcon(timelineSlot.icon, waveType, isCompleted, isCurrent);
+            
+            // 更新状态记录
+            timelineSlot.isCompleted = isCompleted;
+            timelineSlot.isCurrent = isCurrent;
+        }
+    }
+
+    // 更新回合类型和状态
+    updateRoundType(stage, round, waveInfo) {
+        let roundType = 'default';
+        let statusText = '战斗回合';
+        let bgColor = 0x4a5568;
+        let strokeColor = 0x6a7588;
+        let infoText = '准备战斗';
+        
+        // 优先根据waveInfo确定类型
+        if (waveInfo) {
+            // 根据waveInfo的name或description判断类型
+            const waveType = waveInfo.name || '';
+            const waveDesc = waveInfo.description || '';
+            
+            if (waveType.includes('Boss') || waveType.includes('BOSS') || waveType.includes('boss')) {
+                roundType = 'boss';
+                statusText = 'BOSS回合';
+                bgColor = 0x8b1538;
+                strokeColor = 0xdc2626;
+                infoText = `准备迎战: ${waveInfo.name}`;
+            } else if (waveType.includes('精英') || waveType.includes('Elite') || waveType.includes('elite')) {
+                roundType = 'elite';
+                statusText = '精英回合';
+                bgColor = 0x7c2d12;
+                strokeColor = 0xea580c;
+                infoText = `精英怪物: ${waveInfo.name}`;
+            } else if (waveType.includes('野怪') || waveType.includes('小怪') || waveType.includes('普通')) {
+                roundType = 'pve';
+                statusText = '野怪回合';
+                bgColor = 0x365314;
+                strokeColor = 0x65a30d;
+                infoText = `当前波次: ${waveInfo.name}`;
+            } else {
+                // 根据回合数判断类型
+                if (round === 1) {
+                    roundType = 'pve';
+                    statusText = '野怪回合';
+                    bgColor = 0x365314;
+                    strokeColor = 0x65a30d;
+                    infoText = `当前波次: ${waveInfo.name}`;
+                } else if (round === 3) {
+                    roundType = 'augment';
+                    statusText = '强化回合';
+                    bgColor = 0x581c87;
+                    strokeColor = 0x9333ea;
+                    infoText = `获得强化: ${waveInfo.name}`;
+                } else {
+                    roundType = 'default';
+                    statusText = '战斗回合';
+                    bgColor = 0x4a5568;
+                    strokeColor = 0x6a7588;
+                    infoText = `当前波次: ${waveInfo.name}`;
+                }
+            }
+        } else {
+            // 没有waveInfo时的简化判断
+            if (round === 1) {
+                roundType = 'pve';
+                statusText = '野怪回合';
+                bgColor = 0x365314;
+                strokeColor = 0x65a30d;
+                infoText = '野怪攻击';
+            } else if (round === 3) {
+                roundType = 'augment';
+                statusText = '强化回合';
+                bgColor = 0x581c87;
+                strokeColor = 0x9333ea;
+                infoText = '获得强化';
+            } else {
+                roundType = 'default';
+                statusText = '战斗回合';
+                bgColor = 0x4a5568;
+                strokeColor = 0x6a7588;
+                infoText = '准备战斗';
+            }
+        }
+        
+        // 更新UI元素
+        this.drawRoundTypeIcon(roundType);
+        this.safeUpdateText(this.elements.roundStatusText, statusText);
+        this.safeUpdateText(this.elements.currentRoundInfo, infoText);
+        
+        // 更新背景颜色来突出当前回合类型
+        if (this.elements.currentRoundBackground) {
+            this.elements.currentRoundBackground.setFillStyle(bgColor, 0.8);
+            this.elements.currentRoundBackground.setStrokeStyle(2, strokeColor, 1);
+        }
+    }
+
+    // 更新回合状态文字
+    updateRoundStatus(status) {
+        let statusText = '准备阶段';
+        let infoText = '点击开始下一回合';
+        
+        switch(status) {
+            case 'preparing':
+                statusText = '准备阶段';
+                infoText = '点击开始下一回合';
+                break;
+            case 'active':
+                statusText = '战斗中';
+                infoText = '战斗正在进行...';
+                break;
+            case 'completed':
+                statusText = '回合结束';
+                infoText = '回合已完成';
+                break;
+            case 'waiting':
+                statusText = '等待中';
+                infoText = '等待下一回合';
+                break;
+        }
+        
+        this.safeUpdateText(this.elements.roundStatusText, statusText);
+        this.safeUpdateText(this.elements.currentRoundInfo, infoText);
+    }
+
+    // 更新倒计时显示
+    updateCountdown(seconds) {
+        this.safeUpdateText(this.elements.countdownText, seconds.toString());
+    }
+
+    // 启动倒计时进度条
+    startCountdown(duration, nextWave, nextWaveInfo) {
+        // 清除之前的倒计时
+        if (this.countdownTween) {
+            this.countdownTween.stop();
+            this.countdownTween = null;
+        }
+
+        // 根据下一波类型确定提示文本和颜色
+        let statusText = `下一波: ${nextWave}`;
+        let progressColor = 0xffd700; // 金色
+        
+        if (nextWaveInfo) {
+            if (nextWaveInfo.type === 'boss') {
+                statusText = `Boss波: ${nextWave}`;
+                progressColor = 0xff4444; // 红色
+            } else if (nextWaveInfo.type === 'roguelike') {
+                statusText = `成长选择: ${nextWave}`;
+                progressColor = 0xaa44ff; // 紫色
+            } else if (nextWaveInfo.type === 'challenge') {
+                statusText = `挑战波: ${nextWave}`;
+                progressColor = 0xff8800; // 橙色
+            }
+        }
+
+        // 更新状态文本
+        this.safeUpdateText(this.elements.roundStatusText, statusText);
+        this.safeUpdateText(this.elements.currentRoundInfo, '倒计时中...');
+
+        // 修改进度条颜色
+        if (this.elements.waveProgressForeground) {
+            this.elements.waveProgressForeground.setFillStyle(progressColor);
+        }
+
+        // 初始化进度条为满
+        const maxWidth = 700;
+        if (this.elements.waveProgressForeground) {
+            this.elements.waveProgressForeground.displayWidth = maxWidth;
+        }
+
+        // 启动倒计时动画
+        this.countdownTween = this.scene.tweens.add({
+            targets: this.elements.waveProgressForeground,
+            displayWidth: 0,
+            duration: duration,
+            ease: 'Linear',
+            onComplete: () => {
+                // 倒计时结束，恢复进度条
+                this.restoreProgressBar();
+            }
+        });
+    }
+
+    // 恢复进度条状态
+    restoreProgressBar() {
+        // 恢复进度条颜色
+        if (this.elements.waveProgressForeground) {
+            this.elements.waveProgressForeground.setFillStyle(0x48bb78); // 绿色
+        }
+        
+        // 恢复状态文本
+        this.updateRoundStatus('preparing');
+    }
+
+    // 切换播放/暂停状态
+    togglePlayPause() {
+        const isPaused = this.elements.playPauseButton.text === '▶️';
+        this.safeUpdateText(this.elements.playPauseButton, isPaused ? '⏸️' : '▶️');
+        return !isPaused;
+    }
+
+
 
     updateLevel(level, maxTowers) {
         this.safeUpdateText(this.elements.levelText, `${level}级`);
